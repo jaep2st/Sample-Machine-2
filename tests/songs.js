@@ -23,17 +23,17 @@ function song(spec){
   const hit=(str,k)=>{if(!str)return 0;const c=str[k%str.length];return c==="x"?1:c==="o"?0.5:0};
   const chords=spec.chords||[[57,60,64],[53,57,60],[50,53,57],[52,56,59]];
   for(const st of steps){
-    const {t:at,k}=st, bar=Math.floor(k/16);
+    const {t:at,k}=st, bar=Math.floor(k/16), inBreak=spec.breakBars&&bar>=spec.breakBars[0]&&bar<spec.breakBars[1];
     if(spec.drumsFrom!=null&&at<intro+spec.drumsFrom) {} else if(!spec.noDrums){
       const kv=hit(P.kick,k), sv=hit(P.snare,k), hv=hit(P.hat,k);
       if(kv)both(at,x=>Math.sin(2*Math.PI*(48+95*Math.exp(-x*32))*x)*Math.exp(-x*8),.35,.9*kv);
       if(sv)both(at,x=>(rnd()*.55*Math.exp(-x*20)+Math.sin(2*Math.PI*185*x)*.3*Math.exp(-x*28)),.25,.85*sv);
       if(hv){const pan=spec.wide?((k%2)?.8:-.8):0;both(at,x=>{const v=rnd();return v*Math.exp(-x*90)},.06,.22*hv,pan)}
     }
-    if(spec.chordsOn!==false&&k%16===0){const ch=chords[bar%chords.length],len=60/st.bpm*4;
+    if(spec.chordsOn!==false&&!inBreak&&k%16===0){const ch=chords[bar%chords.length],len=60/st.bpm*4;
       both(at,x=>{let s=0;for(const m of ch)s+=Math.sin(2*Math.PI*midiHz(m)*x)*.06+Math.sin(4*Math.PI*midiHz(m)*x)*.015;return s*Math.min(1,x*10)*Math.exp(-x*.4)},len,1)}
-    if(spec.bass&&(k%8===0)){const ch=chords[bar%chords.length];both(at,x=>Math.sin(2*Math.PI*midiHz(ch[0]-24)*x)*Math.exp(-x*2.5),60/st.bpm*2,.35)}
-    if(spec.piano&&(k%2===0)){const ch=chords[bar%chords.length],m=ch[(k/2)%ch.length]+12;both(at,x=>(Math.sin(2*Math.PI*midiHz(m)*x)+.4*Math.sin(4*Math.PI*midiHz(m)*x))*Math.exp(-x*6),.5,.25*(k%8===0?1.3:1))}
+    if(spec.bass&&!inBreak&&(k%8===0)){const ch=chords[bar%chords.length];both(at,x=>Math.sin(2*Math.PI*midiHz(ch[0]-24)*x)*Math.exp(-x*2.5),60/st.bpm*2,.35)}
+    if(spec.piano&&!inBreak&&(k%2===0)){const ch=chords[bar%chords.length],m=ch[(k/2)%ch.length]+12;both(at,x=>(Math.sin(2*Math.PI*midiHz(m)*x)+.4*Math.sin(4*Math.PI*midiHz(m)*x))*Math.exp(-x*6),.5,.25*(k%8===0?1.3:1))}
   }
   if(spec.crackle){for(let i=0;i<n;i++){const v=rnd();if(Math.abs(v)>.9996){L[i]+=v*.5;R[i]+=v*.5}L[i]+=rnd()*.004;R[i]+=rnd()*.004}}
   let pk=0;for(let i=0;i<n;i++)pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));const g=(spec.gain||0.95)/pk;for(let i=0;i<n;i++){L[i]*=g;R[i]*=g}

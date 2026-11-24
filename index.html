@@ -70,7 +70,7 @@ header p{margin:4px 0 0;color:var(--mute)}
 .estat{color:var(--mute);font-size:14px;margin:6px 0 10px;min-height:21px}
 .btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:8px;justify-content:center}
 .btn.main{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-#click[aria-pressed=true],#setone[aria-pressed=true]{background:var(--go);color:#0b1f16;border-color:var(--go)}
+#click[aria-pressed=true],#setone[aria-pressed=true],#tgrit[aria-pressed=true],#tvinyl[aria-pressed=true]{background:var(--go);color:#0b1f16;border-color:var(--go)}
 .btn.red{background:var(--hot);color:#fff;border-color:var(--hot)}
 .btn svg{width:16px;height:16px}
 .brow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
@@ -80,6 +80,9 @@ header p{margin:4px 0 0;color:var(--mute)}
 input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 .styles{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
 .styles button{min-height:38px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:14px}
+#modes button{font-weight:600}
+#kitpads button{min-height:52px;border-radius:10px;border:0;background:var(--pad);color:var(--padink);font-weight:800;cursor:pointer}
+#kitpads button:active{background:var(--hot)}
 .styles button[aria-pressed=true]{background:var(--hot);color:#fff;border-color:var(--hot)}
 .erow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .close{display:none}
@@ -87,6 +90,14 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 .editor[hidden]{display:none}
 .packs{border-top:1px solid var(--line);padding-block:18px 40px}
 .packs h2{font-size:20px;margin:0 0 4px}
+.guide{border-top:1px solid var(--line);padding-block:22px 30px}
+.guide h2{font-size:clamp(24px,4vw,32px);font-weight:800;line-height:1.05;margin:0 0 6px}
+.gsub{margin:0 0 16px;color:var(--mute);font-size:15px;max-width:70ch}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.gcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.gcard h3{margin:0 0 4px;font-size:17px;font-weight:800}
+.gcard p{margin:0 0 8px;font-size:15px;line-height:1.45}
+.gcard a{color:var(--mute);font-size:13px}
 .packs p{margin:0 0 12px;color:var(--mute);font-size:14px}
 .prow{display:flex;flex-wrap:wrap;gap:8px}
 #toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100vw - 32px)}
@@ -119,7 +130,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 </section>
 <div class="band controls">
   <div class="seg" id="bars" aria-label="Bar length"><button data-b="1">1 bar</button><button data-b="2" aria-pressed="true">2 bars</button><button data-b="4">4</button><button data-b="8">8</button><button data-b="16">16</button></div>
-  <div class="seg tabs" id="tabs"><button data-t="best" aria-pressed="true">Best</button><button data-t="weird">Weird</button><button data-t="all">All</button><button data-t="shots">One-shots</button><button data-t="favs">Favorites</button></div>
+  <div class="seg tabs" id="tabs"><button data-t="best" aria-pressed="true">Best</button><button data-t="breaks">Breaks</button><button data-t="open">Open</button><button data-t="weird">Weird</button><button data-t="all">All</button><button data-t="shots">One-shots</button><button data-t="favs">Favorites</button></div>
   <div class="seg" id="padmode" aria-label="What tapping a pad does"><button data-m="loop" aria-pressed="true">Pads loop</button><button data-m="once">Pads play once</button></div>
 </div>
 <main class="band layout">
@@ -141,8 +152,21 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <div class="field"><label for="te">Trim end <output id="o_te"></output></label><input type="range" id="te" min="-0.5" max="0.5" step="0.01"></div>
     <div class="field"><label for="pitch">Pitch <output id="o_pitch"></output></label><input type="range" id="pitch" min="-12" max="12" step="1"></div>
     <div class="field chopOnly"><label for="tbpm">BPM <output id="o_tbpm"></output></label><input type="range" id="tbpm" step="1"></div>
+    <div class="field"><label>Flip modes <output>tap again to re-flip</output></label></div>
+    <div class="styles" id="modes">
+      <button data-m="soul" class="chopOnly">Soul Speed-Up</button><button data-m="micro" class="chopOnly">Micro-Chop Flip</button><button data-m="offgrid" class="chopOnly">Off-Grid Flip</button>
+      <button data-m="screw" class="chopOnly">Screwed</button><button data-m="down" class="chopOnly">Pitch-Down</button>
+      <button data-m="stab">Stab Kit</button><button data-m="drums">Drum Kit</button><button data-m="dusty">Dusty Loop</button><button data-m="bass">Filtered Bass</button><button data-m="sp">SP Grit</button>
+    </div>
+    <div id="kit" hidden style="margin:0 0 12px">
+      <div id="kitpads" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px"></div>
+      <button class="btn" id="savekit" style="width:100%">Save stab kit (8 pitched pads)</button>
+    </div>
     <div class="field"><label>Style</label></div>
     <div class="styles" id="styles"></div>
+    <div class="field"><label for="lpf">Low-pass filter <output id="o_lpf"></output></label><input type="range" id="lpf" min="0" max="100" step="1"></div>
+    <div class="field"><label for="hpf">High-pass filter <output id="o_hpf"></output></label><input type="range" id="hpf" min="0" max="100" step="1"></div>
+    <div class="erow" style="margin-bottom:8px"><button class="btn" id="tgrit" aria-pressed="false">SP grit</button><button class="btn" id="tvinyl" aria-pressed="false">Vinyl</button></div>
     <div class="erow" style="margin-bottom:8px">
       <button class="btn" id="rev" aria-pressed="false">Reverse: off</button>
       <button class="btn" id="rand">Randomize</button>
@@ -162,6 +186,11 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <button class="btn" id="zloop">Loops only</button>
     <button class="btn" id="zos">One-shots</button>
   </div>
+</section>
+<section class="band guide" id="guide">
+  <h2>Where the flip modes come from</h2>
+  <p class="gsub">Each mode is built on a technique the legends are known for. Names describe the technique; the producers are credited here, not affiliated with this app.</p>
+  <div class="ggrid"><div class="gcard"><h3>Soul Speed-Up</h3><p>Speeds the loop up like a turntable, so pitch and tempo rise together. The sped-up soul sound credited to RZA and Just Blaze and taken mainstream by Kanye West around 2003.</p><a href="https://en.wikipedia.org/wiki/Chipmunk_soul">Source</a></div><div class="gcard"><h3>Screwed</h3><p>Slows the loop to around 60–70 BPM, pitch dropping with it, and runs the last phrase back. After Houston's DJ Screw, who invented chopped and screwed in the early '90s.</p><a href="https://en.wikipedia.org/wiki/Chopped_and_screwed">Source</a></div><div class="gcard"><h3>Pitch-Down</h3><p>Drops the loop three semitones, tape-style, and darkens the top end: the moody, pitched-down jazz and soul loops of '90s New York.</p><a href="https://splice.com/blog/sampling-in-hip-hop-key-eras/">Source</a></div><div class="gcard"><h3>Micro-Chop Flip</h3><p>Cuts the loop into 8th notes and re-sequences the punchiest slices into a new phrase, keeping the downbeat. The flip-it-into-something-new approach of DJ Premier, J Dilla and 9th Wonder.</p><a href="https://www.musicradar.com/tuition/tech/how-to-recreate-dj-premiers-sample-slicing-and-sequencing-style-645485">Source</a></div><div class="gcard"><h3>Off-Grid Flip</h3><p>A flip played with MPC-style 66% swing, slightly rushed snares and loose timing, after the unquantized feel J Dilla built on the MPC 3000.</p><a href="https://www.musicradar.com/news/pioneers-j-dilla">Source</a></div><div class="gcard"><h3>Stab Kit</h3><p>Finds the strongest single hit in the chop and pitches it across 8 pads in the song's key, so you can play a new melody, the way DJ Premier built Biggie's "Unbelievable" from one note.</p><a href="https://musicradar.com/news/dj-premier-unbelievable">Source</a></div><div class="gcard"><h3>Drum Kit</h3><p>Pulls single kicks, snares and hats out of a chop so you can program your own pattern. Marley Marl did this with the "Impeach the President" break on MC Shan's "The Bridge" in 1986.</p><a href="https://rockthebells.com/articles/ultimate-breaks-and-beats">Source</a></div><div class="gcard"><h3>Filtered Bass</h3><p>A steep low-pass that turns any loop into a bassline, the trick Pete Rock used on his SP-1200 and Akai S950.</p><a href="https://create.routenote.com/blog/producer-profile-pete-rock/">Source</a></div><div class="gcard"><h3>SP Grit</h3><p>Rebuilds the E-mu SP-1200's 26 kHz, 12-bit crunch, the sound of golden-age East Coast hip-hop.</p><a href="https://www.villagevoice.com/?p=86074">Source</a></div><div class="gcard"><h3>Dusty Loop</h3><p>Tape saturation, vinyl and a rolled-off top end: the mood-first loops of Madlib's cheap SP-303 and The Alchemist.</p><a href="https://www.redbullmusicacademy.com/lectures/madlib-king-of-the-beats">Source</a></div><div class="gcard"><h3>Breaks tab</h3><p>Finds drum-only sections. The most-sampled records ever are mostly drum breaks: "Amen, Brother", "Think (About It)", "Funky Drummer", "Impeach the President".</p><a href="https://fivethirtyeight.com/features/the-most-sampled-song-of-all-time">Source</a></div><div class="gcard"><h3>Open tab</h3><p>Finds melodic sections with few or no drums, like intros and breakdowns, the raw material of drumless loops by The Alchemist, Daringer and Griselda.</p><a href="https://create.routenote.com/blog/producer-profile-the-alchemist/">Source</a></div></div>
 </section>
 <footer class="band" style="border-top:1px solid var(--line);padding-block:18px 34px;color:var(--mute);font-size:14px;display:flex;flex-wrap:wrap;gap:8px 20px">
   <a href="https://github.com/jaep2st/Sample-Machine-2/issues/new" style="color:inherit">Send feedback or report a bug</a>
@@ -195,6 +224,22 @@ function fft(re,im){const n=re.length;let t=fftC[n];if(!t){const bits=Math.log2(
 function movavg(x,k){const n=x.length,p=new Float64Array(n+1);for(let i=0;i<n;i++)p[i+1]=p[i]+x[i];const o=new Float32Array(n),h=Math.floor((k-1)/2);for(let i=0;i<n;i++){const a=Math.max(0,i-h),b=Math.min(n,i-h+k);o[i]=(p[b]-p[a])/k}return o}
 function norm(x){let m=0;for(const v of x)m=Math.max(m,Math.abs(v));if(m>0){const g=0.92/m;for(let i=0;i<x.length;i++)x[i]*=g}return x}
 function edgeFade(x,sr){const n=Math.min(Math.floor(sr*0.003),x.length>>2);for(let i=0;i<n;i++){const g=i/n;x[i]*=g;x[x.length-1-i]*=g}return x}
+/* RBJ biquad filters; run twice for a steep 24 dB slope like a sampler's filter */
+function biquad(x,type,f0,Q,sr){if(!f0||f0>=sr/2.05)return x;const w=2*Math.PI*f0/sr,c=Math.cos(w),a=Math.sin(w)/(2*Q),a0=1+a;let b0,b1,b2;
+  if(type==="lp"){b0=(1-c)/2;b1=1-c;b2=(1-c)/2}else{b0=(1+c)/2;b1=-(1+c);b2=(1+c)/2}const a1=-2*c,a2=1-a,o=new Float32Array(x.length);let x1=0,x2=0,y1=0,y2=0;
+  for(let i=0;i<x.length;i++){const v=x[i],y=(b0*v+b1*x1+b2*x2-a1*y1-a2*y2)/a0;x2=x1;x1=v;y2=y1;y1=y;o[i]=y}return o}
+const filt=(x,type,f0,Q,sr)=>biquad(biquad(x,type,f0,Q,sr),type,f0,Q,sr);
+/* SP-1200 character: 26.04 kHz drop-sample hold and 12-bit steps */
+function grit(x,sr){const hold=sr/26040,o=new Float32Array(x.length);for(let i=0;i<x.length;i++){const v=x[Math.floor(Math.floor(i/hold)*hold)];o[i]=Math.round(v*2048)/2048}return o}
+/* vinyl: soft hiss and crackle from a fixed seed, so the same chop always renders the same */
+function vinyl(xs,sr){let sd=99991;const r=()=>(sd=sd*16807%2147483647)/2147483647*2-1,n=xs[0].length,cr=new Float32Array(n);
+  for(let i=0;i<n;i++){cr[i]=r()*.006;if(Math.abs(r())>.9993)cr[i]+=r()*.25}const c2=biquad(cr,"lp",6000,.7,sr);return xs.map(x=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=x[i]+c2[i];return o})}
+/* re-sequence a loop from its own slices: flip.pat lists which slice plays in each slot */
+function flipChs(chs,flip,sr){const N=flip.pat.length,L=chs[0].length,sl=L/N,fd=Math.max(8,Math.floor(.003*sr)),sw=flip.swing||0;
+  return chs.map(x=>{const o=new Float32Array(L);for(let k=0;k<N;k++){const src=flip.pat[k],odd=k%2===1;let at=Math.round(k*sl+(odd?sw*sl:0)+(flip.hum?flip.hum[k]*sr:0));
+    const len=Math.round(sl*(odd?1-sw:1+sw)),a=Math.round(src*sl);for(let i=0;i<len;i++){const g=Math.min(1,i/fd,(len-1-i)/fd);if(g<=0)continue;const di=((at+i)%L+L)%L;o[di]+=x[(a+i)%L]*g}}return o})}
+/* attack strength at each slice start, used to pick punchy slices for flips */
+function sliceHits(seg,N){const L=seg.length,sl=L/N,w=Math.max(16,Math.floor(sl/6)),out=[];for(let k=0;k<N;k++){const a=Math.round(k*sl);let e0=0,e1=0;for(let i=0;i<w;i++){e1+=Math.abs(seg[a+i]||0);e0+=Math.abs(seg[(a-w+i+L)%L]||0)}out.push(e1-e0*.6)}return out}
 function fx(x,style,sr){if(x.length<100)return x;const th=(a,g,m)=>{for(let i=0;i<a.length;i++)a[i]=Math.tanh(a[i]*g)*m;return a};let o;
   switch(style){
   case"Dusty":return th(movavg(x,16),1.35,.84);
@@ -289,8 +334,12 @@ function scoreChop(s,e){const y=S.y,sr=S.sr,a=Math.floor(s*sr),b=Math.min(y.leng
   let d=0;const tb=Math.min(b,a+Math.floor(.1*sr));for(let i=a+1;i<tb;i++)d+=Math.abs(y[i]-y[i-1]);const tr=Math.min(1,d/Math.max(1,tb-a-1)*8),pos=1-s/S.dur*.4;
   let w=0,wc=0;for(let i=Math.max(0,a-Math.floor(.05*sr));i<Math.min(y.length,a+Math.floor(.1*sr));i++){w+=Math.abs(y[i]);wc++}const on=Math.min(1,(wc?w/wc:0)*3);return Math.max(0,energy*.4+tr*.25+pos*.2+on*.15)}
 /* each chop runs from one detected downbeat to the one B bars later; render() then conforms it to the exact length */
+/* does the music after the chop sound like its start? then the loop circles back naturally */
+function chromaAt(t){const N=4096,sr=S.sr,y=S.y,w=hann(N),re=new Float64Array(N),im=new Float64Array(N),o=Math.floor(t*sr)-N/2,c=new Float64Array(12);for(let i=0;i<N;i++){re[i]=(y[o+i]||0)*w[i];im[i]=0}fft(re,im);
+  for(let b=Math.ceil(60*N/sr);b<Math.floor(2000*N/sr);b++)c[((Math.round(12*Math.log2(b*sr/N/440))+69)%12+12)%12]+=Math.sqrt(re[b]*re[b]+im[b]*im[b]);return c}
+function loopSim(st,e){const beat=60/S.bpm,a=chromaAt(st+beat/2),b=chromaAt(Math.min(S.dur-.1,e+beat/2));let d=0,x=0,z=0;for(let k=0;k<12;k++){d+=a[k]*b[k];x+=a[k]*a[k];z+=b[k]*b[k]}return d/Math.sqrt(x*z||1)}
 function chopSet(B){if(S.sets[B])return S.sets[B];const bt=S.barT||[],pre=.004,out=[];
-  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);const inb=(S.beats||[]).filter(t=>t>=st&&t<=e+.01);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e),shaky:inb.length>=4&&gridScore(inb)<Math.min(1.1,.7*(S.gs||1))})}return S.sets[B]=out}
+  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);const inb=(S.beats||[]).filter(t=>t>=st&&t<=e+.01);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e)*(.7+.6*loopSim(st,e)),shaky:inb.length>=4&&gridScore(inb)<Math.min(1.1,.7*(S.gs||1))})}return S.sets[B]=out}
 function findShots(){const{env,y,sr}=S;let m=0;for(const v of env)m+=v;m/=env.length;let sd=0;for(const v of env)sd+=(v-m)**2;sd=Math.sqrt(sd/env.length);const th=m+1.2*sd,c=[],B=Math.floor(.01*sr);
   for(let f=3;f<env.length-3;f++){const v=env[f];if(v<th)continue;let pk=true;for(let k=-3;k<=3;k++)if(env[f+k]>v){pk=false;break}if(!pk)continue;const t=Math.max(0,f*HOP/sr-.005),a=Math.floor(t*sr);if(a+80*B>y.length)continue;
     const blk=new Float32Array(80);let peak=0;for(let j=0;j<80;j++){let s=0;for(let i=0;i<B;i+=2)s+=Math.abs(y[a+j*B+i]);blk[j]=s/(B/2);peak=Math.max(peak,blk[j])}
@@ -367,10 +416,20 @@ async function secondOpinion(){if(!USE_ESSENTIA){const o=$("finder").options[2];
   status(`Beat fit: Sample Machine ${a.toFixed(2)} · Essentia ${b.toFixed(2)} (higher is tighter)`)}
 function rank(){const all=chopSet(S.bars),sc=[...all].sort((a,b)=>b.score-a.score);S.best=sc.slice(0,Math.max(6,Math.floor(sc.length/3)));const bi=new Set(S.best.map(c=>c.id));S.weird=sc.filter(c=>!bi.has(c.id)).slice(-8).reverse()}
 function byId(id){if(id.startsWith("os_"))return S.shots.find(s=>s.id===id);const[b,n]=id.slice(1).split("_").map(Number);return chopSet(b)[n-1]}
-function tabItems(){switch(S.tab){case"best":return S.best;case"weird":return S.weird;case"all":return chopSet(S.bars);case"shots":return S.shots;case"favs":return[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean)}return[]}
+/* drum-break finder: drum-only sections are noisy across the spectrum (high flatness) and full of hits */
+function breakScores(cs){const N=2048,re=new Float64Array(N),im=new Float64Array(N),w=hann(N),y=S.y,sr=S.sr,lo=Math.ceil(100*N/sr),hi=Math.floor(10000*N/sr),pk=peaks();
+  return cs.map(c=>{let fl=0;for(let j=0;j<6;j++){const o=Math.floor((c.start+(c.end-c.start)*(j+.5)/6)*sr)-N/2;for(let i=0;i<N;i++){re[i]=(y[o+i]||0)*w[i];im[i]=0}fft(re,im);
+    let lg=0,ar=0;for(let b=lo;b<hi;b++){const m=Math.sqrt(re[b]*re[b]+im[b]*im[b])+1e-9;lg+=Math.log(m);ar+=m}const n=hi-lo;fl+=Math.exp(lg/n)/(ar/n)}
+    const hits=pk.filter(q=>q.t>=c.start&&q.t<c.end).length/Math.max(.1,c.end-c.start);return{c,fl:fl/6,hits}})}
+function breaks(){const cs=chopSet(S.bars);if(S.brk&&S.brk.cs===cs)return S.brk.list;const sc=breakScores(cs),mf=sc.map(x=>x.fl).sort((a,b)=>a-b)[sc.length>>1]||1,mh=sc.map(x=>x.hits).sort((a,b)=>a-b)[sc.length>>1]||1;
+  const list=sc.map(x=>({...x,s:(x.fl/mf)*Math.min(1.5,x.hits/mh)})).filter(x=>x.fl>mf*1.12).sort((a,b)=>b.s-a.s).slice(0,8).map(x=>x.c);S.brk={cs,list};return list}
+/* open loops: melodic sections with few hits (intros, breakdowns), what loop-first and drumless producers hunt for */
+function opens(){const cs=chopSet(S.bars);if(S.opn&&S.opn.cs===cs)return S.opn.list;const sc=breakScores(cs),mh=sc.map(x=>x.hits).sort((a,b)=>a-b)[sc.length>>1]||1,mf=sc.map(x=>x.fl).sort((a,b)=>a-b)[sc.length>>1]||1;
+  const list=sc.filter(x=>x.fl<mf*.9&&x.c.score>0).sort((a,b)=>a.fl-b.fl).slice(0,8).map(x=>x.c);S.opn={cs,list};return list}
+function tabItems(){switch(S.tab){case"best":return S.best;case"breaks":return breaks();case"open":return opens();case"weird":return S.weird;case"all":return chopSet(S.bars);case"shots":return S.shots;case"favs":return[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean)}return[]}
 
 /* ---------- render a chop with its tweaks ---------- */
-const base=()=>({shift:0,ts:0,te:0,pitch:0,bpm:S.tb,rev:false,style:"Clean",rand:false});
+const base=()=>({shift:0,ts:0,te:0,pitch:0,bpm:S.tb,rev:false,style:"Clean",rand:false,tape:false,lp:0,hp:0,q:.8,grit:false,vinyl:false,flip:null,mode:""});
 const P=id=>S.params[id]||(S.params[id]=base());
 function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k))return S.cache.get(k);const sr=S.sr,chop=it.kind==="chop";
   let s=it.start+(chop?p.shift:0)+p.ts,e=it.end+(chop?p.shift:0)+p.te;s=Math.max(0,Math.min(s,S.dur-.05));e=Math.max(s+.05,Math.min(e,S.dur));
@@ -380,20 +439,29 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   /* grab extra audio past the seam (before it, when reversed) to crossfade the loop point */
   const pad=chop?.06:0,a0=p.rev?Math.max(0,s-pad):s,a1=p.rev?e:Math.min(S.dur,e+pad);
   let xs=S.ch.map(c=>c.slice(Math.floor(a0*sr),Math.floor(a1*sr))),key=S.key;
-  if(p.pitch)xs=stretch(xs,1/(ratio*f)).map(x=>resample(x,f));
+  /* tape mode: speed and pitch move together like a turntable or tape deck (the sped-up soul sound) */
+  let tapeSt=0;if(p.tape&&chop){xs=xs.map(x=>resample(x,1/ratio));tapeSt=Math.round(12*Math.log2(1/ratio))}
+  else if(p.pitch)xs=stretch(xs,1/(ratio*f)).map(x=>resample(x,f));
   else if(Math.abs(ratio-1)>1e-6)xs=Math.abs(ratio-1)<.006?xs.map(x=>resample(x,1/ratio)):stretch(xs,1/ratio);
   if(p.rand)st.push("Randomized");
-  if(p.pitch){key=shiftKey(S.key,p.pitch);st.push(`${p.pitch>0?"+":""}${p.pitch} st → ${key}`)}
+  if(p.mode)st.push(p.mode);
+  if(tapeSt){key=shiftKey(S.key,tapeSt);st.push(`Tape speed ${tapeSt>0?"+":""}${tapeSt} st → ${key}`)}
+  else if(p.pitch){key=shiftKey(S.key,p.pitch);st.push(`${p.pitch>0?"+":""}${p.pitch} st → ${key}`)}
   if(chop&&p.bpm!==bb)st.push(`${p.bpm} BPM`);
   if(p.rev){xs.forEach(x=>x.reverse());st.push("Reversed")}
   if(p.style!=="Clean"){xs=xs.map(x=>fx(x,p.style,sr));st.push(p.style)}
+  if(p.hp){xs=xs.map(x=>filt(x,"hp",p.hp,.7,sr));st.push(`HP ${p.hp} Hz`)}
+  if(p.lp){xs=xs.map(x=>filt(x,"lp",p.lp,p.q||.8,sr));st.push(`LP ${p.lp>=1000?(p.lp/1000).toFixed(1)+" k":p.lp+" Hz"}`)}
+  if(p.grit){xs=xs.map(x=>grit(x,sr));st.push("SP grit")}
+  if(p.vinyl){xs=vinyl(xs,sr);st.push("Vinyl")}
   let chs,seam=false;
   if(chop)chs=xs.map(x=>{if(x.length<L){const z=new Float32Array(L);z.set(x);x=z}const seg=x.slice(0,L),tail=x.subarray(L),cf=Math.min(tail.length,Math.floor(.02*sr),L>>2);
     if(cf>=32){for(let i=0;i<cf;i++){const t=(i+.5)/cf*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}seam=true}else edgeFade(seg,sr);return seg});
   else chs=xs.map(seg=>{const fi=Math.min(Math.floor(.002*sr),seg.length>>3),fo=Math.min(Math.floor(.015*sr),seg.length>>2);for(let i=0;i<fi;i++)seg[i]*=i/fi;for(let i=0;i<fo;i++)seg[seg.length-1-i]*=i/fo;return seg});
+  if(chop&&p.flip){chs=flipChs(chs,p.flip,sr);st.push(p.flip.swing?`Flipped, ${Math.round(50+p.flip.swing*50)}% swing`:"Flipped")}
   normAll(chs);if(seam)st.push("Seamless loop");if(chs.length>1)st.push("Stereo");const seg=chs[0];
   let name=`${chop?p.bpm:bb}bpm_${key.replace(" ","_")}_${chop?"chop":"oneshot"}${String(it.n).padStart(2,"0")}${chop?"_"+it.id.slice(1).split("_")[0]+"bar":""}_${s.toFixed(1)}s`;
-  if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");
+  if(tapeSt)name+=`_tape${tapeSt>0?"+":""}${tapeSt}`;else if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");if(p.mode)name+="_"+p.mode.toLowerCase().replace(/[^a-z]+/g,"");
   const meta={bpm:chop?p.bpm:bb,root:KEYS.indexOf(key.split(" ")[0]),beats:chop?Math.max(1,Math.round(seg.length/sr*p.bpm/60)):0,one:!chop};const r={chs,seg,name,st,s,e,meta};if(S.cache.size>150)S.cache.clear();S.cache.set(k,r);return r}
 
 /* ---------- playback ---------- */
@@ -433,7 +501,7 @@ const fmt=t=>`${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,"0")}`;
 /* ---------- UI ---------- */
 function status(m){$("status").textContent=m}
 function refresh(){if(S.busy)return;rank();const its=tabItems(),pads=$("pads");
-  if(!its.length){pads.innerHTML=`<div class="empty">${S.tab==="favs"?"No favorites yet. Tap the heart on a pad and it lands here.":"Nothing here at this bar length. Try a shorter one."}</div>`}
+  if(!its.length){pads.innerHTML=`<div class="empty">${S.tab==="favs"?"No favorites yet. Tap the heart on a pad and it lands here.":S.tab==="breaks"?"No drum-only sections found in this track. Breaks are the parts where the drums play alone or almost alone, often in intros or bridges.":S.tab==="open"?"No open sections found. Open loops are melodic parts with few or no drums, like intros and breakdowns, the kind loop-first and drumless producers look for.":"Nothing here at this bar length. Try a shorter one."}</div>`}
   else pads.innerHTML=its.map(it=>{const f=favs.has(fk(it.id));const tag=it.kind==="os"?"One-shot":it.shaky?"Check beat":S.tab==="favs"?it.id.slice(1).split("_")[0]+" bar":"";return`<div class="pad" role="button" tabindex="0" data-id="${esc(it.id)}" aria-current="${S.sel&&S.sel.id===it.id}"><div class="ptop"><span class="pn">${it.n}</span><span class="tag">${esc(tag)}</span><span class="pt">${fmt(it.start)}</span></div><canvas></canvas><div class="pbot"><button class="ib play" aria-label="Play loop">${ICON.play}</button><button class="ib heart" aria-pressed="${f}" aria-label="Favorite">${f?ICON.heartOn:ICON.heart}</button></div></div>`}).join("");
   for(const el of pads.querySelectorAll(".pad"))drawPad(el.querySelector("canvas"),byId(el.dataset.id));
   playUI();drawMap()}
@@ -444,14 +512,71 @@ function select(it){S.sel=it;for(const el of document.querySelectorAll(".pad"))e
 function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;document.body.classList.add("sheet");ed.classList.toggle("isos",it.kind==="os");
   $("etitle").textContent=(it.kind==="os"?"One-shot ":"Chop ")+it.n;const t=$("tbpm"),bb=S.tb;t.min=Math.max(40,bb-40);t.max=Math.min(200,bb+40);
   for(const f of["shift","ts","te","pitch"])$(f).value=p[f];t.value=p.bpm;$("rev").setAttribute("aria-pressed",p.rev);$("rev").textContent="Reverse: "+(p.rev?"on":"off");
-  for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);labels();heartUI();estat();playUI()}
+  for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);
+  for(const b of $("modes").children)b.setAttribute("aria-pressed",!!p.mode&&MODES[b.dataset.m]&&MODES[b.dataset.m].name===p.mode);
+  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;
+  $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
 function closeEditor(){$("editor").hidden=true;document.body.classList.remove("sheet")}
-function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm}
+function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm;$("o_lpf").textContent=p.lp?(p.lp>=1000?(p.lp/1000).toFixed(1)+" kHz":p.lp+" Hz"):"off";$("o_hpf").textContent=p.hp?p.hp+" Hz":"off"}
 let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
 function changed(){S.params[S.sel.id].rand=false;labels();estat()}
+let mseed=(Date.now()%2147483646)+1;const mr=()=>(mseed=mseed*16807%2147483647)/2147483647;
+/* build a flip: slice the loop into 8th notes, keep the downbeat, swap in the punchiest slices, answer the first phrase with a variation */
+function makeFlip(it,p,swing,human){const q={...p,flip:null,mode:""},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
+  const B=it.bars,N=B<=4?B*8:32,hits=sliceHits(r.seg,N),cand=[...hits.keys()].sort((a,b)=>hits[b]-hits[a]).slice(0,Math.max(4,N>>1)),pick=()=>cand[Math.floor(mr()*cand.length)];
+  const ph=Math.min(N,16),phrase=[];for(let k=0;k<ph;k++)phrase.push(k===0?0:mr()<.35?k:pick());
+  const pat=[];for(let k=0;k<N;k++){const pos=k%ph,last=Math.floor(k/ph)%2===1&&pos>=ph-3;pat.push(last?pick():phrase[pos])}
+  const hum=human?pat.map((_,k)=>{const b=k%8;return b===2||b===6?-.008:(mr()*2-1)*.004}):null;return{pat,swing,hum}}
+const MODES={
+  soul:{name:"Soul Speed-Up",go(p){const n=Math.max(2,Math.min(7,Math.round(12*Math.log2(94/S.bpm))));Object.assign(p,{tape:true,bpm:Math.round(S.bpm*2**(n/12)),hp:110,style:"Warm"})}},
+  micro:{name:"Micro-Chop Flip",go(p,it){p.flip=makeFlip(it,p,0,false)}},
+  offgrid:{name:"Off-Grid Flip",go(p,it){Object.assign(p,{flip:makeFlip(it,p,.32,true),lp:9000,q:.7})}},
+  screw:{name:"Screwed",go(p,it){const n=Math.max(-7,Math.min(-2,Math.round(12*Math.log2(68/S.bpm))));Object.assign(p,{tape:true,bpm:Math.round(S.bpm*2**(n/12)),lp:8000,q:.7});
+    const N=it.bars<=4?it.bars*8:32,pat=[...Array(N).keys()],q=N>>2;for(let k=N-q;k<N;k++)pat[k]=pat[k-q];p.flip={pat,swing:0,hum:null}}},
+  down:{name:"Pitch-Down",go(p){Object.assign(p,{tape:true,bpm:Math.round(S.bpm*2**(-3/12)),lp:7000,q:.7,hp:45})}},
+  dusty:{name:"Dusty Loop",go(p){Object.assign(p,{vinyl:true,lp:6500,q:.7,hp:70,style:"Tape"})}},
+  bass:{name:"Filtered Bass",go(p){Object.assign(p,{lp:170,q:1.3,hp:30})}},
+  sp:{name:"SP Grit",go(p){Object.assign(p,{grit:true,lp:12000,q:.7,hp:40})}},
+};
+function applyMode(m){const it=S.sel,p=P(it.id);
+  if(m==="stab"){buildKit(it);return}if(m==="drums"){buildDrumKit(it);return}
+  Object.assign(p,{tape:false,lp:0,hp:0,q:.8,grit:false,vinyl:false,flip:null,style:"Clean",pitch:0,bpm:S.tb,rand:false});MODES[m].go(p,it);p.mode=MODES[m].name;openEditor()}
+/* stab kit: the strongest single hit in this chop, pitched across 8 pads like a sampler keyboard */
+let kit=null;
+function findStab(it){const pk=peaks().filter(q=>q.t>=it.start&&q.t<it.end-.05);if(!pk.length)return{t:it.start,len:Math.min(.5,it.end-it.start)};let best=null;
+  pk.forEach((q,i)=>{const nx=pk[i+1]?pk[i+1].t:it.end,len=Math.min(.8,nx-q.t),sc=q.w*Math.min(len,.5);if(len>=.12&&(!best||sc>best.sc))best={t:q.t,len,sc}});return best||{t:pk[0].t,len:.3}}
+function buildKit(it){const {t,len}=findStab(it),sr=S.sr,a=Math.max(0,Math.floor((t-.005)*sr)),b=Math.min(S.y.length,Math.floor((t+len)*sr)),minor=/minor/.test(S.key),
+    steps=minor?[0,2,3,5,7,8,10,12]:[0,2,4,5,7,9,11,12],root=KEYS.indexOf(S.key.split(" ")[0]);
+  const base=S.ch.map(c=>c.slice(a,b));for(const x of base){const fi=Math.floor(.002*sr),fo=Math.min(Math.floor(.02*sr),x.length>>2);for(let i=0;i<fi;i++)x[i]*=i/fi;for(let i=0;i<fo;i++)x[x.length-1-i]*=i/fo}normAll(base);
+  kit=steps.map(st=>({st,note:KEYS[(root+st)%12],chs:base.map(x=>resample(x,2**(st/12)))}));$("savekit").textContent="Save stab kit (8 pitched pads)";
+  $("kit").hidden=false;$("kitpads").innerHTML=kit.map((k,i)=>`<button data-k="${i}" aria-label="Play stab ${k.note}">${k.note}${k.st===12?"↑":""}</button>`).join("");
+  $("estat").textContent=`Stab Kit: ${len.toFixed(2)} s hit at ${fmt(t)}, pitched across the ${S.key} scale. Tap the pads to play a melody.`}
+/* drum kit: pull single hits out of the chop and sort them into kicks, snares and hats by their sound */
+function hitInfo(t){const N=1024,sr=S.sr,y=S.y,re=new Float64Array(N),im=new Float64Array(N),w=hann(N),o=Math.floor(t*sr);for(let i=0;i<N;i++){re[i]=(y[o+i]||0)*w[i];im[i]=0}fft(re,im);
+  let lo=0,tot=0,cen=0;for(let b=1;b<N/2;b++){const m=Math.sqrt(re[b]*re[b]+im[b]*im[b]),f=b*sr/N;tot+=m;cen+=m*f;if(f<150)lo+=m}
+  /* decay: how long until the hit falls to a quarter of its peak (hats die fast, snares ring) */
+  const B=Math.floor(.005*sr),env=[];for(let j=0;j<60;j++){let a=0;for(let i=0;i<B;i+=2)a+=Math.abs(y[o+j*B+i]||0);env.push(a)}const pk=Math.max(...env.slice(0,4));let d=.3;for(let j=1;j<60;j++)if(env[j]<pk*.25){d=j*.005;break}
+  return{low:lo/(tot||1),cen:cen/(tot||1),decay:d}}
+function buildDrumKit(it){const sr=S.sr,pk=peaks().filter(q=>q.t>=it.start&&q.t<it.end-.03),hits=pk.map((q,i)=>{const nx=pk[i+1]?pk[i+1].t:it.end,len=Math.max(.06,Math.min(.45,nx-q.t)),h=hitInfo(q.t);
+    return{t:q.t,len,w:q.w,type:h.low>.22?"Kick":h.cen>3500&&h.decay<.06?"Hat":"Snare",...h}});
+  const pickT=(ty,n)=>hits.filter(h=>h.type===ty).sort((a,b)=>b.w-a.w).slice(0,n);let sel=[...pickT("Kick",2),...pickT("Snare",3),...pickT("Hat",3)];
+  if(sel.length<4)sel=hits.sort((a,b)=>b.w-a.w).slice(0,8);sel.sort((a,b)=>"KSH".indexOf(a.type[0])-"KSH".indexOf(b.type[0]));
+  if(!sel.length){$("estat").textContent="No clear drum hits in this chop. Try a chop from the Breaks tab.";return}
+  kit=sel.map((h,i)=>{const a=Math.max(0,Math.floor((h.t-.003)*sr)),b=Math.min(S.y.length,Math.floor((h.t+h.len)*sr)),chs=S.ch.map(c=>c.slice(a,b));
+    for(const x of chs){const fi=Math.floor(.001*sr),fo=Math.min(Math.floor(.03*sr),x.length>>1);for(let j=0;j<fi;j++)x[j]*=j/fi;for(let j=0;j<fo;j++)x[x.length-1-j]*=j/fo}normAll(chs);
+    const n=sel.slice(0,i+1).filter(x=>x.type===h.type).length;return{st:0,note:`${h.type} ${n}`,file:`${h.type.toLowerCase()}_${n}`,chs}});
+  $("kit").hidden=false;$("kitpads").innerHTML=kit.map((k,i)=>`<button data-k="${i}" style="font-size:14px">${k.note}</button>`).join("");$("savekit").textContent=`Save drum kit (${kit.length} hits)`;
+  $("estat").textContent=`Drum Kit: ${kit.length} single hits pulled from this chop and sorted by sound. Tap to play, save them to build your own pattern.`}
+function playRaw(chs){const c=ac(),b=c.createBuffer(chs.length,chs[0].length,S.sr);chs.forEach((x,i)=>b.copyToChannel(x,i));const s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start()}
+const hz=v=>v<=0?0:Math.round(60*2**(v/100*8.15)),hzH=v=>v<=0?0:Math.round(20*2**(v/100*6.65)),inv=(f,a,k)=>f?Math.round(Math.log2(f/a)/k*100):0;
 for(const f of["shift","ts","te","pitch","tbpm"])$(f).addEventListener("input",e=>{const p=P(S.sel.id);p[f==="tbpm"?"bpm":f]=Number(e.target.value);changed()});
 $("styles").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;P(S.sel.id).style=b.dataset.s;for(const x of $("styles").children)x.setAttribute("aria-pressed",x===b);changed()});
 $("rev").onclick=()=>{const p=P(S.sel.id);p.rev=!p.rev;openEditor();changed()};
+$("modes").addEventListener("click",e=>{const b=e.target.closest("button");if(b&&S.sel)applyMode(b.dataset.m)});
+$("kitpads").addEventListener("click",e=>{const b=e.target.closest("button");if(b&&kit)playRaw(kit[+b.dataset.k].chs)});
+$("savekit").onclick=()=>{if(!kit)return;const nm=S.name.replace(/[^\w-]+/g,"_");const drums=!!kit[0].file;saveZip(`${nm}_${drums?"drum":"stab"}_kit.zip`,kit.map((k,i)=>({name:drums?`${String(i+1).padStart(2,"0")}_${k.file}.wav`:`${String(i+1).padStart(2,"0")}_stab_${k.note.replace("#","s")}${k.st===12?"_hi":""}.wav`,data:wav(k.chs,S.sr,{bpm:S.tb,root:KEYS.indexOf(k.note),beats:0,one:true})})))};
+$("lpf").addEventListener("input",e=>{P(S.sel.id).lp=hz(+e.target.value);changed()});$("hpf").addEventListener("input",e=>{P(S.sel.id).hp=hzH(+e.target.value);changed()});
+$("tgrit").onclick=()=>{const p=P(S.sel.id);p.grit=!p.grit;openEditor()};$("tvinyl").onclick=()=>{const p=P(S.sel.id);p.vinyl=!p.vinyl;openEditor()};
 $("rand").onclick=()=>{const p=P(S.sel.id),pk=a=>a[Math.floor(Math.random()*a.length)];Object.assign(p,{pitch:pk([-5,-3,-2,2,3,5,7]),rev:pk([true,false]),style:pk(STYLES.slice(1))});openEditor();p.rand=true;labels();estat()};
 $("reset").onclick=()=>{S.params[S.sel.id]=base();openEditor()};
 $("ploop").onclick=()=>{cur&&cur.id===S.sel.id&&cur.loop?stopPlay():play(S.sel,true)};

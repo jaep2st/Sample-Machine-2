@@ -10,6 +10,14 @@ node tests/lab.js --verbose  # a row for every song
 
 No installs needed, only Node.js 18 or newer. The lab reads the analysis code straight out of `index.html`, so it always tests what the site actually ships.
 
+## Flip-mode checks
+
+```
+node tests/flips.js
+```
+
+Renders every flip mode on a generated 90 BPM song with a drum-only break and checks exact loop lengths, no clipping or bad samples, that flips really re-sequence the slices, that filters remove what they should, that the stab kit finds a real hit, and that the break finder lands on the break.
+
 ## What a song must get right
 
 - **Tempo:** the BPM shown is within 1 of the truth. Exactly half or double also counts, since loops still line up.

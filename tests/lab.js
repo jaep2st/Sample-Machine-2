@@ -8,7 +8,6 @@
 //   node tests/lab.js --verbose  print a row for every song
 //
 // Exits with code 1 if any set scores below its required pass count.
-const fs = require("fs"), os = require("os"), path = require("path");
 const { song, SONGS, holdout } = require("./songs.js");
 
 const args = process.argv.slice(2);
@@ -24,20 +23,7 @@ const SETS = [
   { name: "random-9000", songs: () => holdout(30, 9000), need: 28 },
 ];
 
-// ---- load the app's code ----
-const page = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const js = page.match(/<script>\n\{([\s\S]*?)\n\}\n<\/script>/)[1];
-const a = js.indexOf("/* ---------- DSP basics"), b = js.indexOf("/* ---------- playback");
-if (a < 0 || b < 0) throw new Error("Could not find the analysis code in index.html");
-const el = () => ({ textContent: "", options: [{}, {}, {}], value: "auto", setAttribute() {}, style: {}, classList: { add() {}, remove() {}, toggle() {} } });
-global.document = { getElementById: el, querySelectorAll: () => [], body: { classList: { add() {}, remove() {} } } };
-global.localStorage = { getItem: () => null, setItem() {} };
-const code = "let status=()=>{};\n" + (js.slice(0, js.indexOf("let favs")) + js.slice(a, b)).replace(/function status\(m\)\{[^}]*\}/, "") +
-  "\nmodule.exports={S,setBpm,onsetEnv,tempo,detectKey,chopSet,render,mono};";
-const tmp = path.join(os.tmpdir(), `sm_lab_${process.pid}.js`);
-fs.writeFileSync(tmp, code);
-const A = require(tmp);
-fs.unlinkSync(tmp);
+const A = require("./load.js")();
 
 const near = (arr, t) => { let lo = 0, hi = arr.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; arr[m] < t ? lo = m : hi = m } return Math.min(Math.abs(arr[lo] - t), Math.abs(arr[hi] - t)) };
 

@@ -20,3 +20,5 @@ jobs:
           node-version: 22
       - name: Run the test lab
         run: node tests/lab.js
+      - name: Check flip modes, stab kit, filters and break finder
+        run: node tests/flips.js
