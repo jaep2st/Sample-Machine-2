@@ -120,6 +120,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 <div class="band controls">
   <div class="seg" id="bars" aria-label="Bar length"><button data-b="1">1 bar</button><button data-b="2" aria-pressed="true">2 bars</button><button data-b="4">4</button><button data-b="8">8</button><button data-b="16">16</button></div>
   <div class="seg tabs" id="tabs"><button data-t="best" aria-pressed="true">Best</button><button data-t="weird">Weird</button><button data-t="all">All</button><button data-t="shots">One-shots</button><button data-t="favs">Favorites</button></div>
+  <div class="seg" id="padmode" aria-label="What tapping a pad does"><button data-m="loop" aria-pressed="true">Pads loop</button><button data-m="once">Pads play once</button></div>
 </div>
 <main class="band layout">
   <div class="pads" id="pads"></div>
@@ -146,8 +147,9 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <button class="btn" id="rev" aria-pressed="false">Reverse: off</button>
       <button class="btn" id="rand">Randomize</button>
       <button class="btn" id="reset">Reset</button>
-      <button class="btn red" id="save">Save</button>
+      <button class="btn red" id="save">Save chop</button>
     </div>
+    <button class="btn chopOnly" id="saveloop" style="width:100%">Save ×4 loop</button>
   </aside>
 </main>
 <section class="band packs">
@@ -161,6 +163,12 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <button class="btn" id="zos">One-shots</button>
   </div>
 </section>
+<footer class="band" style="border-top:1px solid var(--line);padding-block:18px 34px;color:var(--mute);font-size:14px;display:flex;flex-wrap:wrap;gap:8px 20px">
+  <a href="https://github.com/jaep2st/Sample-Machine-2/issues/new" style="color:inherit">Send feedback or report a bug</a>
+  <a href="terms.html" style="color:inherit">Terms of use</a>
+  <a href="privacy.html" style="color:inherit">Privacy</a>
+  <span>Only chop music you have the rights to use. Clear samples before you release them.</span>
+</footer>
 <div id="toast" role="status"></div>
 <script>
 {
@@ -233,25 +241,38 @@ async function saveZip(filename,files){const dl=await downloads();
 
 /* ---------- analysis ---------- */
 function shiftKey(k,n){if(!n)return k;const[r,m]=k.split(" ");return KEYS[((KEYS.indexOf(r)+n)%12+12)%12]+" "+m}
-async function onsetEnv(y,sr){const frames=Math.max(1,Math.floor((y.length-FR)/HOP)+1),env=new Float32Array(frames),low=new Float32Array(frames),lb=Math.max(2,Math.round(200*FR/sr)),w=hann(FR),prev=new Float32Array(FR/2),re=new Float64Array(FR),im=new Float64Array(FR),top=FR/4;
-  for(let f=0;f<frames;f++){const o=f*HOP;for(let i=0;i<FR;i++){re[i]=(y[o+i]||0)*w[i];im[i]=0}fft(re,im);let s=0;for(let b=1;b<top;b++){const m=Math.log1p(10*Math.sqrt(re[b]*re[b]+im[b]*im[b])),d=m-prev[b];if(d>0){s+=d;if(b<=lb)low[f]+=d}prev[b]=m}env[f]=s;
+async function onsetEnv(y,sr){const frames=Math.max(1,Math.floor((y.length-FR)/HOP)+1),env=new Float32Array(frames),low=new Float32Array(frames),mid=new Float32Array(frames),lb=Math.max(2,Math.round(200*FR/sr)),mb0=Math.round(250*FR/sr),mb1=Math.round(3000*FR/sr),w=hann(FR),prev=new Float32Array(FR/2),re=new Float64Array(FR),im=new Float64Array(FR),top=FR/4,
+    /* weight the bands like a drummer hears them: kick strongest, hats lightest, so off-beat hats can't pull the grid */
+    bw=Float32Array.from({length:FR/4},(_,b)=>{const hz=b*sr/FR;return hz<150?3:hz<500?1.5:hz<3000?1:.4});
+  for(let f=0;f<frames;f++){const o=f*HOP;for(let i=0;i<FR;i++){re[i]=(y[o+i]||0)*w[i];im[i]=0}fft(re,im);let s=0;for(let b=1;b<top;b++){const m=Math.log1p(10*Math.sqrt(re[b]*re[b]+im[b]*im[b])),d=m-prev[b];if(d>0){s+=d*bw[b];if(b<=lb)low[f]+=d;else if(b>=mb0&&b<=mb1)mid[f]+=d}prev[b]=m}env[f]=s;
     if(f%3000===0){status(`Finding the tempo… ${Math.round(f/frames*100)}%`);await tick()}}
-  S.low=low;return env}
-function tempo(env,fps){const n=env.length;let mean=0;for(const v of env)mean+=v;mean/=n;const e=Float32Array.from(env,v=>v-mean),minL=Math.floor(fps*60/190),maxL=Math.ceil(fps*60/55),ac=new Float64Array(maxL+2);
-  for(let L=minL-1;L<=maxL+1;L++){let s=0;for(let i=0;i+L<n;i++)s+=e[i]*e[i+L];ac[L]=s/Math.max(1,n-L)}
-  let best=minL,bv=-Infinity;for(let L=minL;L<=maxL;L++){const z=Math.log2(60*fps/L/110)/0.9,v=ac[L]*Math.exp(-0.5*(z**2));if(v>bv){bv=v;best=L}}
-  const a=ac[best-1],b=ac[best],c=ac[best+1],den=a-2*b+c,lag=best+(den<0?0.5*(a-c)/den:0);let bpm=60*fps/lag;if(bpm>145)bpm/=2;else if(bpm<72)bpm*=2;return bpm}
+  S.low=low;S.mid=mid;return env}
+/* tempo: autocorrelation read through a comb (a true beat period also repeats at 2x, 3x, 4x) with a gentle prior around 100 BPM */
+function tempo(env,fps){const n=env.length;let mean=0;for(const v of env)mean+=v;mean/=n;const e=Float32Array.from(env,v=>v-mean),minL=Math.floor(fps*60/190),maxL=Math.ceil(fps*60/55),top=Math.min(n-1,maxL*4+2),ac=new Float64Array(top+2);
+  for(let L=1;L<=top;L++){let s=0;for(let i=0;i+L<n;i++)s+=e[i]*e[i+L];ac[L]=s/Math.max(1,n-L)}
+  const at=x=>{const i=Math.floor(x),t=x-i;return (ac[i]||0)*(1-t)+(ac[i+1]||0)*t};
+  let best=minL,bv=-Infinity;for(let L=minL;L<=maxL;L+=.25){let c=0;for(let k=1;k<=4;k++)c+=at(k*L)/k;const z=Math.log2(60*fps/L/100),v=c*Math.exp(-0.5*((z/1.1)**2));if(v>bv){bv=v;best=L}}
+  let bpm=60*fps/best;if(bpm>150)bpm/=2;else if(bpm<68)bpm*=2;return bpm}
 /* dynamic-programming beat tracker: follows the beat through tempo drift instead of a fixed grid */
-function trackBeats(env,fps,bpm){const n=env.length;let m=0,sd=0;for(const v of env)m+=v;m/=n;for(const v of env)sd+=(v-m)**2;sd=Math.sqrt(sd/n)||1;
+let TIGHT=100;function trackBeats(env,fps,bpm){const n=env.length;let m=0,sd=0;for(const v of env)m+=v;m/=n;for(const v of env)sd+=(v-m)**2;sd=Math.sqrt(sd/n)||1;
   const o=Float32Array.from(env,v=>v/sd),P=fps*60/bpm,lo=Math.max(1,Math.round(P/2)),hi=Math.round(2*P),pen=new Float32Array(hi+1),C=new Float32Array(n),B=new Int32Array(n).fill(-1);
-  for(let d=lo;d<=hi;d++)pen[d]=-100*(Math.log(d/P)**2);
+  for(let d=lo;d<=hi;d++)pen[d]=-TIGHT*(Math.log(d/P)**2);
   for(let t=0;t<n;t++){let best=-Infinity,bi=-1;for(let d=lo;d<=hi&&d<=t;d++){const v=C[t-d]+pen[d];if(v>best){best=v;bi=t-d}}C[t]=o[t]+(bi>=0?Math.max(0,best):0);B[t]=bi>=0&&best>0?bi:-1}
   let t=Math.max(0,n-Math.round(1.5*P)),end=t;for(let i=t;i<n;i++)if(C[i]>C[end])end=i;
   const fr=[];for(let i=end;i>=0;i=B[i])fr.push(i);fr.reverse();
   /* sub-frame timing from the onset peak's shape */
   return fr.map(f=>{const a=env[f-1]||0,b=env[f],c=env[f+1]||0,den=a-2*b+c;const d=den<0?Math.max(-.5,Math.min(.5,.5*(a-c)/den)):0;return((f+d)*HOP+FR/2)/S.sr})}
-function downbeats(beats,force){const low=S.low||S.env,fps=S.sr/HOP,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(low[f-1]||0,low[f]||0,low[f+1]||0)};
-  let db=0,dv=-1;for(let k=0;k<4;k++){let s=0,c=0;for(let i=k;i<beats.length;i+=4){s+=at(beats[i]);c++}if(c&&s/c>dv){dv=s/c;db=k}}if(force!=null)db=force;
+/* chord-change strength at each beat: bars usually start where the harmony moves */
+function harmonyChange(beats){const N=4096,y=S.y,sr=S.sr,w=hann(N),re=new Float64Array(N),im=new Float64Array(N),lo=Math.ceil(60*N/sr),hi=Math.floor(2000*N/sr),ch=[];
+  for(let i=0;i<beats.length;i++){const c=new Float64Array(12),nxt=beats[i+1]||beats[i]+.5,o=Math.floor(((beats[i]+nxt)/2)*sr)-N/2;for(let j=0;j<N;j++){re[j]=(y[o+j]||0)*w[j];im[j]=0}fft(re,im);
+    for(let b=lo;b<hi;b++)c[((Math.round(12*Math.log2(b*sr/N/440))+69)%12+12)%12]+=Math.sqrt(re[b]*re[b]+im[b]*im[b]);ch.push(c)}
+  /* compare the bar before with the bar after, so each side holds the same drums and only the harmony differs */
+  for(const c of ch){let t=0;for(let k=0;k<12;k++)t+=c[k];if(t>0)for(let k=0;k<12;k++)c[k]/=t}
+  const win=(i,j)=>{const o=new Float64Array(12);for(let x=i;x<j;x++)if(ch[x])for(let k=0;k<12;k++)o[k]+=ch[x][k];return o};
+  return ch.map((_,i)=>{if(i<4||i+4>ch.length)return 0;const p=win(i-4,i),c=win(i,i+4);let d=0,a=0,b=0;for(let k=0;k<12;k++){d+=c[k]*p[k];a+=c[k]*c[k];b+=p[k]*p[k]}return 1-d/Math.sqrt(a*b||1)})}
+function downbeats(beats,force){const low=S.low||S.env,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(low[f-1]||0,low[f]||0,low[f+1]||0)};
+  const kick=beats.map(at),hc=harmonyChange(beats),mk=kick.reduce((a,b)=>a+b,0)/kick.length||1,mh=hc.reduce((a,b)=>a+b,0)/hc.length||1;
+  let db=0,dv=-1;for(let k=0;k<4;k++){let s=0,c=0;for(let i=k;i<beats.length;i+=4){s+=kick[i]/mk+hc[i]/mh;c++}if(c&&s/c>dv){dv=s/c;db=k}}if(force!=null)db=force;
   const bars=[];for(let i=db;i<beats.length;i+=4)bars.push(beats[i]);
   if(bars.length>1){const d=[];for(let i=1;i<bars.length;i++)d.push(bars[i]-bars[i-1]);d.sort((x,y)=>x-y);const L=d[d.length>>1];
     while(bars[0]-L>=0)bars.unshift(bars[0]-L);while(bars[bars.length-1]+L<=S.dur+.02)bars.push(bars[bars.length-1]+L)}
@@ -269,7 +290,7 @@ function scoreChop(s,e){const y=S.y,sr=S.sr,a=Math.floor(s*sr),b=Math.min(y.leng
   let w=0,wc=0;for(let i=Math.max(0,a-Math.floor(.05*sr));i<Math.min(y.length,a+Math.floor(.1*sr));i++){w+=Math.abs(y[i]);wc++}const on=Math.min(1,(wc?w/wc:0)*3);return Math.max(0,energy*.4+tr*.25+pos*.2+on*.15)}
 /* each chop runs from one detected downbeat to the one B bars later; render() then conforms it to the exact length */
 function chopSet(B){if(S.sets[B])return S.sets[B];const bt=S.barT||[],pre=.004,out=[];
-  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);const inb=(S.beats||[]).filter(t=>t>=st&&t<=e+.01);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e),shaky:inb.length>=4&&gridScore(inb)<1.25})}return S.sets[B]=out}
+  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);const inb=(S.beats||[]).filter(t=>t>=st&&t<=e+.01);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e),shaky:inb.length>=4&&gridScore(inb)<Math.min(1.1,.7*(S.gs||1))})}return S.sets[B]=out}
 function findShots(){const{env,y,sr}=S;let m=0;for(const v of env)m+=v;m/=env.length;let sd=0;for(const v of env)sd+=(v-m)**2;sd=Math.sqrt(sd/env.length);const th=m+1.2*sd,c=[],B=Math.floor(.01*sr);
   for(let f=3;f<env.length-3;f++){const v=env[f];if(v<th)continue;let pk=true;for(let k=-3;k<=3;k++)if(env[f+k]>v){pk=false;break}if(!pk)continue;const t=Math.max(0,f*HOP/sr-.005),a=Math.floor(t*sr);if(a+80*B>y.length)continue;
     const blk=new Float32Array(80);let peak=0;for(let j=0;j<80;j++){let s=0;for(let i=0;i<B;i+=2)s+=Math.abs(y[a+j*B+i]);blk[j]=s/(B/2);peak=Math.max(peak,blk[j])}
@@ -287,12 +308,47 @@ function gridScore(beats){if(!beats||beats.length<8)return 0;const env=S.env,at=
   for(let i=1;i<beats.length;i++){on+=at(beats[i]);off+=at((beats[i]+beats[i-1])/2)}return on/Math.max(1e-9,off)}
 const NAMES={sm:"Sample Machine",ess:"Essentia",tap:"your tapped tempo",edit:"your edit"};
 function applyBeats(beats,src,fresh,db){S.beats=beats;S.src=src;const d=[];for(let i=1;i<beats.length;i++)d.push(beats[i]-beats[i-1]);d.sort((x,y)=>x-y);
-  S.bpm=d.length?60/d[d.length>>1]:120;S.tb=Math.round(S.bpm);S.barT=downbeats(beats,db);S.sets={};S.params={};S.cache.clear();$("bpm").textContent=S.tb;
+  S.bpm=d.length?60/d[d.length>>1]:120;S.tb=Math.round(S.bpm);S.gs=gridScore(beats);S.barT=downbeats(beats,db);S.sets={};S.params={};S.cache.clear();$("bpm").textContent=S.tb;
   $("grid").textContent="Grid from "+NAMES[src];if(!fresh){S.sel=null;closeEditor();stopPlay();refresh()}}
-function setBpm(b,fresh){b=Math.max(50,Math.min(200,b));S.bSM=trackBeats(S.env,S.sr/HOP,b);applyBeats(S.bSM,"sm",fresh)}
+/* fix local slips: every 2 bars, check if a 16th-note nudge puts the big hits on beats and 8ths; adopt it only when clearly better */
+function peaksOf(e){let m=0,sd=0;for(const v of e)m+=v;m/=e.length;for(const v of e)sd+=(v-m)**2;sd=Math.sqrt(sd/e.length);const list=[];for(let f=2;f<e.length-2;f++){const v=e[f];if(v>m+.5*sd&&v>=e[f-1]&&v>=e[f+1]&&v>=e[f-2]&&v>=e[f+2])list.push({t:(f*HOP+FR/2)/S.sr,w:v-m})}return list}
+function fixSlips(bs){if(bs.length<16||!S.low)return bs;const pk=peaksOf(S.low),out=bs.slice();
+  const score=(i0,i1,sh)=>{let s=0,j=i0;for(const p of pk){if(p.t<bs[i0]||p.t>=bs[i1])continue;while(bs[j+1]<=p.t)j++;const per=bs[j+1]-bs[j],x=((p.t-bs[j])/per-sh)*4,q=((x%4)+4)%4,r=Math.round(q)%4,d=Math.abs(q-Math.round(q));if(d<.2&&r%2===0)s+=p.w*(r===0?1:.6)}return s};
+  for(let i=0;i+8<bs.length;i+=4){const i1=i+8,base=score(i,i1,0);let best=0,bv=base;for(const sh of [-.25,.25]){const v=score(i,i1,sh);if(v>bv*1.15){bv=v;best=sh}}
+    if(best)for(let k=i;k<i+4;k++)out[k]=bs[k]+best*(bs[k+1]-bs[k])}
+  return out}
+function onKicks(bs){const low=S.low,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(low[f-1]||0,low[f]||0,low[f+1]||0)};let on=0,mid=0;const m=[];
+  for(let i=0;i+1<bs.length;i++){on+=at(bs[i]);const t=(bs[i]+bs[i+1])/2;mid+=at(t);m.push(t)}if(mid>on*1.25)return m;
+  /* kick on every beat AND halfway between: it's four-on-the-floor at double this speed */
+  const d=[];for(let i=1;i<bs.length;i++)d.push(bs[i]-bs[i-1]);d.sort((x,y)=>x-y);const bpm=d.length?60/d[d.length>>1]:0;
+  /* "a kick is there" = at least 60% as strong as the typical kick on the beat */
+  const onv=bs.map(at).sort((x,y)=>x-y),th=.6*(onv[onv.length>>1]||0);
+  const fOn=bs.filter(t=>at(t)>th).length/bs.length,fMid=m.filter(t=>at(t)>th).length/Math.max(1,m.length);
+  return fOn>.75&&fMid>.75&&bpm*2<=180?doubleBeats(bs):bs}
+/* beat salience: how strongly the music hits on these beats compared with the track overall */
+function salience(bs){const env=S.env;let m=0;for(const v of env)m+=v;m/=env.length;let s=0;for(const t of bs){const f=Math.round((t*S.sr-FR/2)/HOP);s+=Math.max(env[f-1]||0,env[f]||0,env[f+1]||0)}return s/Math.max(1,bs.length)/(m||1)}
+/* does this beat grid, cut into 16ths, explain every hit in the song? (scored above what a grid that dense would catch by chance) */
+function peaks(){if(S.pk&&S.pk.env===S.env)return S.pk.list;const e=S.env;let m=0,sd=0;for(const v of e)m+=v;m/=e.length;for(const v of e)sd+=(v-m)**2;sd=Math.sqrt(sd/e.length);
+  const list=[];for(let f=2;f<e.length-2;f++){const v=e[f];if(v>m+.5*sd&&v>=e[f-1]&&v>=e[f+1]&&v>=e[f-2]&&v>=e[f+2])list.push({t:(f*HOP+FR/2)/S.sr,w:v-m})}S.pk={env:S.env,list};return list}
+let LAM=.3;function gridFit16(bs){if(bs.length<8)return -1;const tol=.2,pk=peaks(),pos=[];let i=0;
+  for(const p of pk){if(p.t<bs[0]||p.t>=bs[bs.length-1])continue;while(bs[i+1]<=p.t)i++;pos.push([(p.t-bs[i])/(bs[i+1]-bs[i])*4,p.w])}
+  let best=-1;/* allow straight, 16th swing and 8th (triplet-ish) swing */
+  for(const s16 of [0,.15,.3,.45])for(const s8 of [0,.33,.67]){const grid=[0,1+s16,2+s8,3+s16+s8/2,4];let hit=0,tot=0,strong=0;
+    for(const[x,w]of pos){let d=9,k=0;grid.forEach((g,j)=>{const dd=Math.abs(x-g);if(dd<d){d=dd;k=j}});tot+=w;if(d<tol){hit+=w;if(k%2===0)strong+=w}}
+    const cov=hit/Math.max(1e-9,tot),chance=2*tol,sc=(cov-chance)/(1-chance)+.15*strong/Math.max(1e-9,tot)-LAM*(s16+s8);if(sc>best)best=sc}
+  return best}
+/* try the tempo and its usual confusions (3:4, 2:3, 4:5), track each one, keep the grid that explains the music best */
+function bestTempo(t0){const fold=b=>{while(b>150)b/=2;while(b<68)b*=2;return b},seen=[],out=[];
+  for(const r of [1,3/4,4/3,2/3,3/2,4/5,5/4]){const b=fold(t0*r);if(seen.some(x=>Math.abs(x-b)<2))continue;seen.push(b);const bs=onKicks(fixSlips(trackBeats(S.env,S.sr/HOP,b)));out.push({b,bs,s:gridFit16(bs)+(r===1?.03:0)})}
+  /* half or double speed only wins if it explains the music clearly better */
+  for(const r of [2,1/2]){const b=t0*r;if(b<60||b>185||seen.some(x=>Math.abs(x-b)<2))continue;seen.push(b);const bs=onKicks(trackBeats(S.env,S.sr/HOP,b));out.push({b,bs,s:gridFit16(bs)-.2})}
+  out.sort((x,y)=>y.s-x.s);return out[0]}
+function setBpm(b,fresh,exact){b=Math.max(50,Math.min(200,b));S.bSM=exact?onKicks(trackBeats(S.env,S.sr/HOP,b)):bestTempo(b).bs;applyBeats(S.bSM,"sm",fresh)}
 function halfBeats(bs){const a=bs.filter((_,i)=>i%2===0),b=bs.filter((_,i)=>i%2===1);return gridScore(a)>=gridScore(b)?a:b}
 function doubleBeats(bs){const o=[];for(let i=0;i<bs.length;i++){o.push(bs[i]);if(i+1<bs.length)o.push((bs[i]+bs[i+1])/2)}return o}
 /* Essentia's RhythmExtractor2013 in a background worker, so the page never freezes */
+/* set to false to ship without Essentia (needed before charging money: Essentia's open license is for non-commercial use) */
+const USE_ESSENTIA=true;
 const ESS="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/";
 const ESSW=`let es=null;
 async function init(base){importScripts(base+"essentia-wasm.web.js",base+"essentia.js-core.js");const f=self.EssentiaWASM;let r=typeof f==="function"?f({locateFile:p=>base+p}):f,mod=null;
@@ -303,7 +359,7 @@ function essentiaBeats(y,sr){return new Promise(res=>{let w;try{w=new Worker(URL
   const done=v=>{clearTimeout(to);try{w.terminate()}catch(e){}res(v)},to=setTimeout(()=>done(null),180000);
   w.onmessage=e=>done(e.data&&e.data.ok&&e.data.ticks.length>8?e.data:null);w.onerror=()=>done(null);
   let x=sr===44100?y.slice():resample(y,sr/44100);w.postMessage({y:x,base:ESS,method:x.length>44100*240?"degara":"multifeature"},[x.buffer])})}
-async function secondOpinion(){const tok=S.name+S.dur;$("finder").options[2].textContent="Essentia (checking…)";
+async function secondOpinion(){if(!USE_ESSENTIA){const o=$("finder").options[2];if(o)o.remove();status("");return}const tok=S.name+S.dur;$("finder").options[2].textContent="Essentia (checking…)";
   const r=S.dur<=420?await essentiaBeats(S.y,S.sr):null;if(tok!==S.name+S.dur)return;const o=$("finder").options[2];
   if(!r){o.textContent="Essentia (unavailable)";o.disabled=true;if($("finder").value==="auto")status("");return}
   S.bES=r.ticks.filter(t=>t>=0&&t<S.dur);o.textContent="Essentia";o.disabled=false;
@@ -400,9 +456,13 @@ $("rand").onclick=()=>{const p=P(S.sel.id),pk=a=>a[Math.floor(Math.random()*a.le
 $("reset").onclick=()=>{S.params[S.sel.id]=base();openEditor()};
 $("ploop").onclick=()=>{cur&&cur.id===S.sel.id&&cur.loop?stopPlay():play(S.sel,true)};
 $("ponce").onclick=()=>play(S.sel,false);$("pstop").onclick=stopPlay;$("eclose").onclick=closeEditor;$("eheart").onclick=()=>toggleFav(S.sel.id);
-$("save").onclick=()=>{const it=S.sel,r=render(it),files=[{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}];if(it.kind==="chop")files.push({name:r.name+"_loop.wav",data:wav(makeLoop(r.chs,S.sr),S.sr,r.meta,4)});saveZip(r.name+".zip",files)};
-$("pads").addEventListener("click",e=>{const el=e.target.closest(".pad");if(!el)return;const it=byId(el.dataset.id);if(e.target.closest(".play")){cur&&cur.id===it.id?stopPlay():play(it,true);return}if(e.target.closest(".heart")){toggleFav(it.id);return}select(it)});
+$("save").onclick=()=>{const r=render(S.sel);saveZip(r.name+".zip",[{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}])};
+$("saveloop").onclick=()=>{const r=render(S.sel);saveZip(r.name+"_loop.zip",[{name:r.name+"_loop.wav",data:wav(makeLoop(r.chs,S.sr),S.sr,r.meta,4)}])};
+$("pads").addEventListener("click",e=>{const el=e.target.closest(".pad");if(!el)return;const it=byId(el.dataset.id);if(e.target.closest(".play")){S.padMode==="once"?play(it,false):cur&&cur.id===it.id?stopPlay():play(it,true);return}if(e.target.closest(".heart")){toggleFav(it.id);return}select(it)});
 $("pads").addEventListener("keydown",e=>{const el=e.target.closest(".pad");if(el&&e.target===el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();select(byId(el.dataset.id))}});
+$("padmode").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.padMode=b.dataset.m;for(const x of $("padmode").children)x.setAttribute("aria-pressed",x===b)});
+/* keys 1-9 trigger the pads on screen, like an MPC */
+document.addEventListener("keydown",e=>{if(e.target.closest&&e.target.closest("input,select,textarea"))return;if(/^[1-9]$/.test(e.key)){const el=document.querySelectorAll(".pad")[+e.key-1];if(el){const it=byId(el.dataset.id);S.padMode==="once"?play(it,false):cur&&cur.id===it.id?stopPlay():play(it,true)}}});
 document.addEventListener("keydown",e=>{if(e.key===" "&&S.sel&&!e.target.closest(".pad,button,input")){e.preventDefault();$("ploop").click()}});
 $("bars").addEventListener("click",e=>{const b=e.target.closest("button");if(!b||S.busy)return;S.bars=Number(b.dataset.b);for(const x of $("bars").children)x.setAttribute("aria-pressed",x===b);if(S.sel&&S.sel.kind==="chop"&&S.tab!=="favs"){S.sel=null;closeEditor()}refresh()});
 $("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.tab=b.dataset.t;for(const x of $("tabs").children)x.setAttribute("aria-pressed",x===b);refresh()});
