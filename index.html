@@ -44,6 +44,10 @@ header p{margin:4px 0 0;color:var(--mute)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
 .seg button{min-height:44px;padding:0 14px;border:0;background:none;cursor:pointer;font-weight:600;white-space:nowrap}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.seg button{flex:none}
+#tabs{display:flex;flex-wrap:wrap;max-width:100%}
+#tabs button{flex:1 1 auto}
+@media(max-width:600px){#tabs{width:100%}#tabs button{min-width:22%}}
 .tabs{overflow-x:auto;max-width:100%}
 .layout{display:grid;gap:18px;padding-block:14px 28px}
 @media(min-width:900px){.layout{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.editor{position:sticky;top:12px}}
