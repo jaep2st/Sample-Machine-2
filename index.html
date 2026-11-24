@@ -189,20 +189,25 @@ function fx(x,style,sr){if(x.length<100)return x;const th=(a,g,m)=>{for(let i=0;
   case"Chorus":{const d=Math.floor(.012*sr);o=new Float32Array(x.length);for(let i=0;i<x.length;i++)o[i]=x[i]*.7+(i>=d?x[i-d]:0)*.35;return th(o,1.05,.93)}}
   return x}
 /* WSOLA time-stretch: rate>1 = shorter */
-function stretch(x,rate){if(Math.abs(rate-1)<1e-3||x.length<4096)return x;const N=2048,Hs=1024,tol=512,w=hann(N),outLen=Math.floor(x.length/rate),out=new Float32Array(outLen+N),ws=new Float32Array(outLen+N);let prev=0;
-  for(let k=0;k*Hs<outLen;k++){const nom=Math.round(k*Hs*rate);let pos=Math.min(nom,x.length-1);
-    if(k>0){const tgt=prev+Hs,lo=Math.max(0,nom-tol),hi=Math.min(x.length-N,nom+tol);let best=-Infinity;for(let c=lo;c<=hi;c+=2){let s=0;for(let i=0;i<N;i+=8)s+=(x[tgt+i]||0)*x[c+i];if(s>best){best=s;pos=c}}}
-    const o=k*Hs;for(let i=0;i<N;i++){out[o+i]+=(x[pos+i]||0)*w[i];ws[o+i]+=w[i]}prev=pos}
+function stretchPlan(x,rate){const N=2048,Hs=1024,tol=512,outLen=Math.floor(x.length/rate),pos=[];let prev=0;
+  for(let k=0;k*Hs<outLen;k++){const nom=Math.round(k*Hs*rate);let p=Math.min(nom,x.length-1);
+    if(k>0){const tgt=prev+Hs,lo=Math.max(0,nom-tol),hi=Math.min(x.length-N,nom+tol);let best=-Infinity;for(let c=lo;c<=hi;c+=2){let s=0;for(let i=0;i<N;i+=8)s+=(x[tgt+i]||0)*x[c+i];if(s>best){best=s;p=c}}}
+    pos.push(p);prev=p}return{pos,outLen}}
+function stretchApply(x,plan){const N=2048,Hs=1024,w=hann(N),{pos,outLen}=plan,out=new Float32Array(outLen+N),ws=new Float32Array(outLen+N);
+  pos.forEach((p,k)=>{const o=k*Hs;for(let i=0;i<N;i++){out[o+i]+=(x[p+i]||0)*w[i];ws[o+i]+=w[i]}});
   const r=new Float32Array(outLen);for(let i=0;i<outLen;i++)r[i]=ws[i]>1e-3?out[i]/ws[i]:0;return r}
+function mono(xs){if(xs.length===1)return xs[0];const o=new Float32Array(xs[0].length);for(const x of xs)for(let i=0;i<o.length;i++)o[i]+=x[i]/xs.length;return o}
+function stretch(xs,rate){if(Math.abs(rate-1)<1e-3||xs[0].length<4096)return xs;const plan=stretchPlan(mono(xs),rate);return xs.map(x=>stretchApply(x,plan))}
+function normAll(xs){let m=0;for(const x of xs)for(const v of x)m=Math.max(m,Math.abs(v));if(m>0){const g=0.92/m;for(const x of xs)for(let i=0;i<x.length;i++)x[i]*=g}return xs}
 function resample(x,f){if(f===1)return x;const n=Math.floor(x.length/f),o=new Float32Array(n);for(let i=0;i<n;i++){const p=i*f,a=Math.floor(p),t=p-a;o[i]=(x[a]||0)*(1-t)+(x[a+1]||0)*t}return o}
-function makeLoop(seg,sr,reps=4){const o=new Float32Array(seg.length*reps);for(let r=0;r<reps;r++)o.set(seg,r*seg.length);return o}
+function makeLoop(chs,sr,reps=4){return chs.map(seg=>{const o=new Float32Array(seg.length*reps);for(let r=0;r<reps;r++)o.set(seg,r*seg.length);return o})}
 
 /* ---------- files ---------- */
 /* 16-bit WAV with an ACID chunk: tempo, beat count and root key, read by FL Studio, Ableton and other DAWs */
-function wav(seg,sr,meta,reps=1){const n=seg.length,ac=meta?32:0,b=new ArrayBuffer(44+ac+n*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
-  w(0,"RIFF");v.setUint32(4,36+ac+n*2,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+function wav(chs,sr,meta,reps=1){if(!Array.isArray(chs))chs=[chs];const C=chs.length,n=chs[0].length,ac=meta?32:0,b=new ArrayBuffer(44+ac+n*2*C),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,"RIFF");v.setUint32(4,36+ac+n*2*C,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,C,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2*C,true);v.setUint16(32,2*C,true);v.setUint16(34,16,true);
   let o=36;if(meta){w(o,"acid");v.setUint32(o+4,24,true);v.setUint32(o+8,meta.one?0x03:0x06,true);v.setUint16(o+12,60+Math.max(0,meta.root),true);v.setUint16(o+14,0x8000,true);v.setFloat32(o+16,0,true);v.setUint32(o+20,meta.one?0:meta.beats*reps,true);v.setUint16(o+24,4,true);v.setUint16(o+26,4,true);v.setFloat32(o+28,meta.bpm,true);o+=32}
-  w(o,"data");v.setUint32(o+4,n*2,true);o+=8;for(let i=0;i<n;i++,o+=2){const x=Math.max(-1,Math.min(1,seg[i]));v.setInt16(o,x<0?x*32768:x*32767,true)}return new Uint8Array(b)}
+  w(o,"data");v.setUint32(o+4,n*2*C,true);o+=8;for(let i=0;i<n;i++)for(let c=0;c<C;c++,o+=2){const x=Math.max(-1,Math.min(1,chs[c][i]||0));v.setInt16(o,x<0?x*32768:x*32767,true)}return new Uint8Array(b)}
 const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
 function zip(files){const enc=new TextEncoder(),parts=[],cen=[];let off=0,cs=0;const used=new Set();
@@ -249,7 +254,7 @@ function findShots(){const{env,y,sr}=S;let m=0;for(const v of env)m+=v;m/=env.le
   return pick.map((x,i)=>({id:`os_${i+1}`,kind:"os",n:i+1,start:x.t,end:x.t+x.len}))}
 function buildWave(){const n=1600,y=S.y,b=Math.max(1,Math.floor(y.length/n)),w=new Float32Array(n);for(let i=0;i<n;i++){let m=0;const a=i*b,e=Math.min(y.length,a+b);for(let j=a;j<e;j+=4)m=Math.max(m,Math.abs(y[j]));w[i]=m}S.wave=w}
 
-async function analyse(y,sr,name){S.busy=true;stopPlay();S.y=y.length>MAXSEC*sr?y.slice(0,MAXSEC*sr):y;S.sr=sr;S.name=name;S.dur=S.y.length/sr;S.sets={};S.params={};S.cache.clear();S.sel=null;
+async function analyse(y,sr,name,chs){S.busy=true;stopPlay();const cut=c=>c.length>MAXSEC*sr?c.slice(0,MAXSEC*sr):c;S.y=cut(y);S.ch=(chs||[y]).map(cut);S.sr=sr;S.name=name;S.dur=S.y.length/sr;S.sets={};S.params={};S.cache.clear();S.sel=null;
   $("tname").textContent=name;$("len").textContent=fmt(S.dur);$("key").textContent="…";$("bpm").textContent="…";$("pads").innerHTML="";closeEditor();buildWave();drawMap();
   S.env=await onsetEnv(S.y,sr);setBpm(refine(S.env,sr/HOP,tempo(S.env,sr/HOP)),true);status("Reading the key…");await tick();S.key=detectKey(S.y,sr);$("key").textContent=S.key;
   S.shots=findShots();status(y.length>MAXSEC*sr?"Over 10 minutes, so only the first 10 were chopped.":"");S.busy=false;refresh()}
@@ -268,31 +273,31 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   const L=Math.max(64,Math.round((e-s)*sr*ratio));
   /* grab extra audio past the seam (before it, when reversed) to crossfade the loop point */
   const pad=chop?.06:0,a0=p.rev?Math.max(0,s-pad):s,a1=p.rev?e:Math.min(S.dur,e+pad);
-  let x=S.y.slice(Math.floor(a0*sr),Math.floor(a1*sr)),key=S.key;
-  if(p.pitch)x=resample(stretch(x,1/(ratio*f)),f);
-  else if(Math.abs(ratio-1)>1e-6)x=Math.abs(ratio-1)<.02?resample(x,1/ratio):stretch(x,1/ratio);
+  let xs=S.ch.map(c=>c.slice(Math.floor(a0*sr),Math.floor(a1*sr))),key=S.key;
+  if(p.pitch)xs=stretch(xs,1/(ratio*f)).map(x=>resample(x,f));
+  else if(Math.abs(ratio-1)>1e-6)xs=Math.abs(ratio-1)<.02?xs.map(x=>resample(x,1/ratio)):stretch(xs,1/ratio);
   if(p.rand)st.push("Randomized");
   if(p.pitch){key=shiftKey(S.key,p.pitch);st.push(`${p.pitch>0?"+":""}${p.pitch} st → ${key}`)}
   if(chop&&p.bpm!==bb)st.push(`${p.bpm} BPM`);
-  if(p.rev){x.reverse();st.push("Reversed")}
-  if(p.style!=="Clean"){x=fx(x,p.style,sr);st.push(p.style)}
-  norm(x);let seg;
-  if(chop){if(x.length<L){const z=new Float32Array(L);z.set(x);x=z}seg=x.slice(0,L);const tail=x.subarray(L),cf=Math.min(tail.length,Math.floor(.02*sr),L>>2);
-    if(cf>=32){for(let i=0;i<cf;i++){const t=(i+.5)/cf*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}st.push("Seamless loop")}else edgeFade(seg,sr)}
-  else{seg=x;const fi=Math.min(Math.floor(.002*sr),seg.length>>3),fo=Math.min(Math.floor(.015*sr),seg.length>>2);for(let i=0;i<fi;i++)seg[i]*=i/fi;for(let i=0;i<fo;i++)seg[seg.length-1-i]*=i/fo}
+  if(p.rev){xs.forEach(x=>x.reverse());st.push("Reversed")}
+  if(p.style!=="Clean"){xs=xs.map(x=>fx(x,p.style,sr));st.push(p.style)}
+  let chs,seam=false;
+  if(chop)chs=xs.map(x=>{if(x.length<L){const z=new Float32Array(L);z.set(x);x=z}const seg=x.slice(0,L),tail=x.subarray(L),cf=Math.min(tail.length,Math.floor(.02*sr),L>>2);
+    if(cf>=32){for(let i=0;i<cf;i++){const t=(i+.5)/cf*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}seam=true}else edgeFade(seg,sr);return seg});
+  else chs=xs.map(seg=>{const fi=Math.min(Math.floor(.002*sr),seg.length>>3),fo=Math.min(Math.floor(.015*sr),seg.length>>2);for(let i=0;i<fi;i++)seg[i]*=i/fi;for(let i=0;i<fo;i++)seg[seg.length-1-i]*=i/fo;return seg});
+  normAll(chs);if(seam)st.push("Seamless loop");if(chs.length>1)st.push("Stereo");const seg=chs[0];
   let name=`${chop?p.bpm:bb}bpm_${key.replace(" ","_")}_${chop?"chop":"oneshot"}${String(it.n).padStart(2,"0")}${chop?"_"+it.id.slice(1).split("_")[0]+"bar":""}_${s.toFixed(1)}s`;
   if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");
-  const meta={bpm:chop?p.bpm:bb,root:KEYS.indexOf(key.split(" ")[0]),beats:chop?Math.max(1,Math.round(seg.length/sr*p.bpm/60)):0,one:!chop};const r={seg,name,st,s,e,meta};if(S.cache.size>150)S.cache.clear();S.cache.set(k,r);return r}
+  const meta={bpm:chop?p.bpm:bb,root:KEYS.indexOf(key.split(" ")[0]),beats:chop?Math.max(1,Math.round(seg.length/sr*p.bpm/60)):0,one:!chop};const r={chs,seg,name,st,s,e,meta};if(S.cache.size>150)S.cache.clear();S.cache.set(k,r);return r}
 
 /* ---------- playback ---------- */
 let ctx=null,cur=null,raf=0;
 function ac(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();if(ctx.state==="suspended")ctx.resume();return ctx}
 /* a silent looping media element keeps iPhones playing sound with the silent switch on */
-const AE=new Audio(URL.createObjectURL(new Blob([wav(new Float32Array(4410),44100)],{type:"audio/wav"})));AE.loop=true;AE.setAttribute("playsinline","");
-function unlock(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}if(AE.paused){const q=AE.play();if(q&&q.catch)q.catch(()=>{})}}
-document.addEventListener("visibilitychange",()=>{if(document.hidden){AE.pause();stopPlay()}});
+function unlock(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stopPlay()});
 /* sample-accurate looping: the buffer repeats with no gap */
-function play(it,loop){stopPlay();unlock();const r=render(it),c=ac(),b=c.createBuffer(1,r.seg.length,S.sr);b.copyToChannel(r.seg,0);const src=c.createBufferSource();src.buffer=b;src.loop=loop;src.connect(c.destination);src.start();
+function play(it,loop){stopPlay();unlock();const r=render(it),c=ac(),b=c.createBuffer(r.chs.length,r.seg.length,S.sr);r.chs.forEach((x,i)=>b.copyToChannel(x,i));const src=c.createBufferSource();src.buffer=b;src.loop=loop;src.connect(c.destination);src.start();
   cur={id:it.id,src,t0:c.currentTime,len:b.duration,loop,s:r.s,e:r.e,rev:P(it.id).rev};src.onended=()=>{if(cur&&cur.src===src){cur=null;playUI()}};playUI();cancelAnimationFrame(raf);raf=requestAnimationFrame(anim)}
 function stopPlay(){if(cur){try{cur.src.stop()}catch(e){}cur=null}playUI()}
 function anim(){drawMap();if(cur)raf=requestAnimationFrame(anim)}
@@ -338,7 +343,7 @@ $("rand").onclick=()=>{const p=P(S.sel.id),pk=a=>a[Math.floor(Math.random()*a.le
 $("reset").onclick=()=>{S.params[S.sel.id]=base();openEditor()};
 $("ploop").onclick=()=>{cur&&cur.id===S.sel.id&&cur.loop?stopPlay():play(S.sel,true)};
 $("ponce").onclick=()=>play(S.sel,false);$("pstop").onclick=stopPlay;$("eclose").onclick=closeEditor;$("eheart").onclick=()=>toggleFav(S.sel.id);
-$("save").onclick=()=>{const it=S.sel,r=render(it),files=[{name:r.name+".wav",data:wav(r.seg,S.sr,r.meta)}];if(it.kind==="chop")files.push({name:r.name+"_loop.wav",data:wav(makeLoop(r.seg,S.sr),S.sr,r.meta,4)});saveZip(r.name+".zip",files)};
+$("save").onclick=()=>{const it=S.sel,r=render(it),files=[{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}];if(it.kind==="chop")files.push({name:r.name+"_loop.wav",data:wav(makeLoop(r.chs,S.sr),S.sr,r.meta,4)});saveZip(r.name+".zip",files)};
 $("pads").addEventListener("click",e=>{const el=e.target.closest(".pad");if(!el)return;const it=byId(el.dataset.id);if(e.target.closest(".play")){cur&&cur.id===it.id?stopPlay():play(it,true);return}if(e.target.closest(".heart")){toggleFav(it.id);return}select(it)});
 $("pads").addEventListener("keydown",e=>{const el=e.target.closest(".pad");if(el&&e.target===el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();select(byId(el.dataset.id))}});
 document.addEventListener("keydown",e=>{if(e.key===" "&&S.sel&&!e.target.closest(".pad,button,input")){e.preventDefault();$("ploop").click()}});
@@ -347,12 +352,12 @@ $("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)
 $("map").addEventListener("click",e=>{if(S.busy||!S.wave)return;const r=e.currentTarget.getBoundingClientRect(),t=(e.clientX-r.left)/r.width*S.dur,list=[...tabItems(),...chopSet(S.bars)],it=list.find(i=>t>=i.start&&t<i.end);if(it){select(it);play(it,true)}});
 $("half").onclick=()=>!S.busy&&setBpm(S.bpm/2);$("dbl").onclick=()=>!S.busy&&setBpm(S.bpm*2);$("dn").onclick=()=>!S.busy&&setBpm(Math.round(S.bpm)-1);$("up").onclick=()=>!S.busy&&setBpm(Math.round(S.bpm)+1);
 async function packs(kind){if(S.busy)return;status("Building pack…");await tick();let files=[],fn;
-  if(kind==="fav"){const its=[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean);if(!its.length){status("");toast("No favorites yet");return}files=its.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.seg,S.sr,r.meta)}});fn="favorites"}
-  else if(kind==="os"){files=S.shots.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.seg,S.sr,r.meta)}});fn="oneshots"}
-  else{const cs=chopSet(S.bars);for(const it of cs){const r=render(it);files.push(kind==="loop"?{name:r.name+"_loop.wav",data:wav(makeLoop(r.seg,S.sr),S.sr,r.meta,4)}:{name:r.name+".wav",data:wav(r.seg,S.sr,r.meta)});if(files.length%8===0)await tick()}fn=kind==="loop"?"loops_only":"all_chops"}
+  if(kind==="fav"){const its=[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean);if(!its.length){status("");toast("No favorites yet");return}files=its.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}});fn="favorites"}
+  else if(kind==="os"){files=S.shots.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}});fn="oneshots"}
+  else{const cs=chopSet(S.bars);for(const it of cs){const r=render(it);files.push(kind==="loop"?{name:r.name+"_loop.wav",data:wav(makeLoop(r.chs,S.sr),S.sr,r.meta,4)}:{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)});if(files.length%8===0)await tick()}fn=kind==="loop"?"loops_only":"all_chops"}
   status("");saveZip(`${S.name.replace(/[^\w-]+/g,"_")}_${fn}.zip`,files)}
 $("zfav").onclick=()=>packs("fav");$("zall").onclick=()=>packs("all");$("zloop").onclick=()=>packs("loop");$("zos").onclick=()=>packs("os");
-$("file").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;e.target.value="";status("Decoding…");try{const buf=await ac().decodeAudioData(await f.arrayBuffer());const n=buf.length,y=new Float32Array(n);for(let c=0;c<buf.numberOfChannels;c++){const d=buf.getChannelData(c);for(let i=0;i<n;i++)y[i]+=d[i]/buf.numberOfChannels}await analyse(y,buf.sampleRate,f.name.replace(/\.[^.]+$/,""))}catch(err){S.busy=false;status("Couldn't read that file. Try an mp3, wav or m4a.")}});
+$("file").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;e.target.value="";status("Decoding…");try{const buf=await ac().decodeAudioData(await f.arrayBuffer());const n=buf.length,y=new Float32Array(n);const C=Math.min(2,buf.numberOfChannels),chs=[];for(let c=0;c<C;c++){const d=new Float32Array(buf.getChannelData(c));chs.push(d);for(let i=0;i<n;i++)y[i]+=d[i]/C}await analyse(y,buf.sampleRate,f.name.replace(/\.[^.]+$/,""),chs)}catch(err){S.busy=false;status("Couldn't read that file. Try an mp3, wav or m4a.")}});
 document.addEventListener("dragover",e=>e.preventDefault());document.addEventListener("drop",e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){const dt=new DataTransfer();dt.items.add(f);$("file").files=dt.files;$("file").dispatchEvent(new Event("change"))}});
 const ro=new ResizeObserver(()=>{drawMap();for(const el of document.querySelectorAll(".pad"))drawPad(el.querySelector("canvas"),byId(el.dataset.id))});ro.observe($("mapbox"));
 
