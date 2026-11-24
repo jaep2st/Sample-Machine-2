@@ -70,6 +70,7 @@ header p{margin:4px 0 0;color:var(--mute)}
 .estat{color:var(--mute);font-size:14px;margin:6px 0 10px;min-height:21px}
 .btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:8px;justify-content:center}
 .btn.main{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#click[aria-pressed=true],#setone[aria-pressed=true]{background:var(--go);color:#0b1f16;border-color:var(--go)}
 .btn.red{background:var(--hot);color:#fff;border-color:var(--hot)}
 .btn svg{width:16px;height:16px}
 .brow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
@@ -104,8 +105,14 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <span class="tname" id="tname">Demo beat</span>
     <span class="chip">Key <b id="key">–</b></span>
     <span class="chip">BPM <b id="bpm">–</b>
-      <button class="mini" id="half" aria-label="Halve tempo">½</button><button class="mini" id="dn" aria-label="Tempo down one">−</button><button class="mini" id="up" aria-label="Tempo up one">+</button><button class="mini" id="dbl" aria-label="Double tempo">×2</button></span>
+      <button class="mini" id="half" aria-label="Halve tempo">½</button><button class="mini" id="dn" aria-label="Tempo down one">−</button><button class="mini" id="up" aria-label="Tempo up one">+</button><button class="mini" id="dbl" aria-label="Double tempo">×2</button><button class="mini" id="tap" aria-label="Tap tempo" style="padding:0 10px">Tap</button></span>
     <span class="chip" id="len"></span>
+  </div>
+  <div class="readout" style="margin-top:-2px">
+    <label class="chip" for="finder">Beat finder
+      <select id="finder" class="mini" style="padding:0 8px;font-weight:600"><option value="auto">Auto</option><option value="sm">Sample Machine</option><option value="ess" disabled>Essentia (loading…)</option></select></label>
+    <button class="mini" id="setone" aria-pressed="false" style="padding:0 12px">Set beat 1</button>
+    <span class="chip" id="grid" style="color:var(--mute);font-size:14px"></span>
   </div>
   <div class="fig" id="mapbox"><canvas id="map" aria-label="Chop map of the whole track. Tap to pick a chop."></canvas></div>
   <p id="status"></p>
@@ -121,12 +128,14 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <button class="ib heart" id="eheart" aria-pressed="false" aria-label="Favorite" style="background:var(--bg);color:var(--ink)"></button>
       <button class="ib close" id="eclose" aria-label="Close editor" style="background:var(--bg);color:var(--ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <p class="estat" id="estat"></p>
-    <div class="brow">
+    <div class="brow" style="grid-template-columns:repeat(4,minmax(0,1fr))">
       <button class="btn main" id="ploop"></button>
       <button class="btn" id="ponce">Once</button>
       <button class="btn" id="pstop">Stop</button>
+      <button class="btn chopOnly" id="click" aria-pressed="false">Click</button>
     </div>
-    <div class="field chopOnly"><label for="shift">Shift whole chop <output id="o_shift"></output></label><input type="range" id="shift" min="-2" max="2" step="0.05"></div>
+    <div class="erow chopOnly" style="margin-bottom:4px"><button class="btn" id="bm">◀ 1 beat</button><button class="btn" id="bp">1 beat ▶</button></div>
+    <div class="field chopOnly"><label for="shift">Shift whole chop <output id="o_shift"></output></label><input type="range" id="shift" min="-4" max="4" step="0.01"></div>
     <div class="field"><label for="ts">Trim start <output id="o_ts"></output></label><input type="range" id="ts" min="-0.5" max="0.5" step="0.01"></div>
     <div class="field"><label for="te">Trim end <output id="o_te"></output></label><input type="range" id="te" min="-0.5" max="0.5" step="0.01"></div>
     <div class="field"><label for="pitch">Pitch <output id="o_pitch"></output></label><input type="range" id="pitch" min="-12" max="12" step="1"></div>
@@ -144,6 +153,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 <section class="band packs">
   <h2>Packs</h2>
   <p>Each pack is a .zip of 16-bit WAVs, built with every chop's current tweaks. Everything runs on your device: your tracks are never uploaded anywhere.</p>
+  <p>Second beat finder: <a href="https://essentia.upf.edu/" style="color:inherit">Essentia.js</a> (AGPL-3.0). This app's source: <a href="https://github.com/jaep2st/Sample-Machine-2" style="color:inherit">github.com/jaep2st/Sample-Machine-2</a>.</p>
   <div class="prow">
     <button class="btn" id="zfav">Favorites</button>
     <button class="btn" id="zall">All chops</button>
@@ -240,8 +250,8 @@ function trackBeats(env,fps,bpm){const n=env.length;let m=0,sd=0;for(const v of 
   const fr=[];for(let i=end;i>=0;i=B[i])fr.push(i);fr.reverse();
   /* sub-frame timing from the onset peak's shape */
   return fr.map(f=>{const a=env[f-1]||0,b=env[f],c=env[f+1]||0,den=a-2*b+c;const d=den<0?Math.max(-.5,Math.min(.5,.5*(a-c)/den)):0;return((f+d)*HOP+FR/2)/S.sr})}
-function downbeats(beats){const low=S.low||S.env,fps=S.sr/HOP,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(low[f-1]||0,low[f]||0,low[f+1]||0)};
-  let db=0,dv=-1;for(let k=0;k<4;k++){let s=0,c=0;for(let i=k;i<beats.length;i+=4){s+=at(beats[i]);c++}if(c&&s/c>dv){dv=s/c;db=k}}
+function downbeats(beats,force){const low=S.low||S.env,fps=S.sr/HOP,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(low[f-1]||0,low[f]||0,low[f+1]||0)};
+  let db=0,dv=-1;for(let k=0;k<4;k++){let s=0,c=0;for(let i=k;i<beats.length;i+=4){s+=at(beats[i]);c++}if(c&&s/c>dv){dv=s/c;db=k}}if(force!=null)db=force;
   const bars=[];for(let i=db;i<beats.length;i+=4)bars.push(beats[i]);
   if(bars.length>1){const d=[];for(let i=1;i<bars.length;i++)d.push(bars[i]-bars[i-1]);d.sort((x,y)=>x-y);const L=d[d.length>>1];
     while(bars[0]-L>=0)bars.unshift(bars[0]-L);while(bars[bars.length-1]+L<=S.dur+.02)bars.push(bars[bars.length-1]+L)}
@@ -259,7 +269,7 @@ function scoreChop(s,e){const y=S.y,sr=S.sr,a=Math.floor(s*sr),b=Math.min(y.leng
   let w=0,wc=0;for(let i=Math.max(0,a-Math.floor(.05*sr));i<Math.min(y.length,a+Math.floor(.1*sr));i++){w+=Math.abs(y[i]);wc++}const on=Math.min(1,(wc?w/wc:0)*3);return Math.max(0,energy*.4+tr*.25+pos*.2+on*.15)}
 /* each chop runs from one detected downbeat to the one B bars later; render() then conforms it to the exact length */
 function chopSet(B){if(S.sets[B])return S.sets[B];const bt=S.barT||[],pre=.004,out=[];
-  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e)})}return S.sets[B]=out}
+  for(let j=0,i=1;j+B<bt.length&&i<=80;j+=B,i++){const st=Math.max(0,bt[j]-pre),e=Math.min(S.dur,bt[j+B]-pre);const inb=(S.beats||[]).filter(t=>t>=st&&t<=e+.01);out.push({id:`c${B}_${i}`,kind:"chop",n:i,bars:B,start:st,end:e,score:scoreChop(st,e),shaky:inb.length>=4&&gridScore(inb)<1.25})}return S.sets[B]=out}
 function findShots(){const{env,y,sr}=S;let m=0;for(const v of env)m+=v;m/=env.length;let sd=0;for(const v of env)sd+=(v-m)**2;sd=Math.sqrt(sd/env.length);const th=m+1.2*sd,c=[],B=Math.floor(.01*sr);
   for(let f=3;f<env.length-3;f++){const v=env[f];if(v<th)continue;let pk=true;for(let k=-3;k<=3;k++)if(env[f+k]>v){pk=false;break}if(!pk)continue;const t=Math.max(0,f*HOP/sr-.005),a=Math.floor(t*sr);if(a+80*B>y.length)continue;
     const blk=new Float32Array(80);let peak=0;for(let j=0;j<80;j++){let s=0;for(let i=0;i<B;i+=2)s+=Math.abs(y[a+j*B+i]);blk[j]=s/(B/2);peak=Math.max(peak,blk[j])}
@@ -271,9 +281,34 @@ function buildWave(){const n=1600,y=S.y,b=Math.max(1,Math.floor(y.length/n)),w=n
 async function analyse(y,sr,name,chs){S.busy=true;stopPlay();const cut=c=>c.length>MAXSEC*sr?c.slice(0,MAXSEC*sr):c;S.y=cut(y);S.ch=(chs||[y]).map(cut);S.sr=sr;S.name=name;S.dur=S.y.length/sr;S.sets={};S.params={};S.cache.clear();S.sel=null;
   $("tname").textContent=name;$("len").textContent=fmt(S.dur);$("key").textContent="…";$("bpm").textContent="…";$("pads").innerHTML="";closeEditor();buildWave();drawMap();
   S.env=await onsetEnv(S.y,sr);setBpm(tempo(S.env,sr/HOP),true);status("Reading the key…");await tick();S.key=detectKey(S.y,sr);$("key").textContent=S.key;
-  S.shots=findShots();status(y.length>MAXSEC*sr?"Over 10 minutes, so only the first 10 were chopped.":"");S.busy=false;refresh()}
-function setBpm(b,fresh){b=Math.max(50,Math.min(200,b));S.beats=trackBeats(S.env,S.sr/HOP,b);const d=[];for(let i=1;i<S.beats.length;i++)d.push(S.beats[i]-S.beats[i-1]);d.sort((x,y)=>x-y);
-  S.bpm=d.length?60/d[d.length>>1]:b;S.tb=Math.round(S.bpm);S.barT=downbeats(S.beats);S.sets={};S.params={};S.cache.clear();$("bpm").textContent=S.tb;if(!fresh){S.sel=null;closeEditor();stopPlay();refresh()}}
+  S.shots=findShots();status(y.length>MAXSEC*sr?"Over 10 minutes, so only the first 10 were chopped.":"Double-checking the beat with Essentia…");S.busy=false;S.bES=null;$("finder").value="auto";refresh();secondOpinion()}
+/* how well a beat grid sits on the music: onset strength on the beats vs halfway between them */
+function gridScore(beats){if(!beats||beats.length<8)return 0;const env=S.env,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(env[f-1]||0,env[f]||0,env[f+1]||0)};let on=0,off=0;
+  for(let i=1;i<beats.length;i++){on+=at(beats[i]);off+=at((beats[i]+beats[i-1])/2)}return on/Math.max(1e-9,off)}
+const NAMES={sm:"Sample Machine",ess:"Essentia",tap:"your tapped tempo",edit:"your edit"};
+function applyBeats(beats,src,fresh,db){S.beats=beats;S.src=src;const d=[];for(let i=1;i<beats.length;i++)d.push(beats[i]-beats[i-1]);d.sort((x,y)=>x-y);
+  S.bpm=d.length?60/d[d.length>>1]:120;S.tb=Math.round(S.bpm);S.barT=downbeats(beats,db);S.sets={};S.params={};S.cache.clear();$("bpm").textContent=S.tb;
+  $("grid").textContent="Grid from "+NAMES[src];if(!fresh){S.sel=null;closeEditor();stopPlay();refresh()}}
+function setBpm(b,fresh){b=Math.max(50,Math.min(200,b));S.bSM=trackBeats(S.env,S.sr/HOP,b);applyBeats(S.bSM,"sm",fresh)}
+function halfBeats(bs){const a=bs.filter((_,i)=>i%2===0),b=bs.filter((_,i)=>i%2===1);return gridScore(a)>=gridScore(b)?a:b}
+function doubleBeats(bs){const o=[];for(let i=0;i<bs.length;i++){o.push(bs[i]);if(i+1<bs.length)o.push((bs[i]+bs[i+1])/2)}return o}
+/* Essentia's RhythmExtractor2013 in a background worker, so the page never freezes */
+const ESS="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/";
+const ESSW=`let es=null;
+async function init(base){importScripts(base+"essentia-wasm.web.js",base+"essentia.js-core.js");const f=self.EssentiaWASM;let r=typeof f==="function"?f({locateFile:p=>base+p}):f,mod=null;
+ await new Promise((res,rej)=>{const pr=r&&r.ready&&typeof r.ready.then==="function"?r.ready:r;if(pr&&typeof pr.then==="function")pr.then(x=>{mod=x||r;res()},rej);else{mod=r;res()}});
+ if(!(mod&&mod.EssentiaJS)&&r&&r.EssentiaJS)mod=r;for(let i=0;i<300&&!(mod&&mod.EssentiaJS);i++)await new Promise(z=>setTimeout(z,100));es=new Essentia(mod)}
+onmessage=async e=>{try{if(!es)await init(e.data.base);const v=es.arrayToVector(e.data.y),r=es.RhythmExtractor2013(v,208,e.data.method,40);postMessage({ok:true,bpm:r.bpm,ticks:Array.from(es.vectorToArray(r.ticks))});try{v.delete()}catch(_){}}catch(err){postMessage({ok:false,err:String(err)})}};`;
+function essentiaBeats(y,sr){return new Promise(res=>{let w;try{w=new Worker(URL.createObjectURL(new Blob([ESSW],{type:"text/javascript"})))}catch(e){return res(null)}
+  const done=v=>{clearTimeout(to);try{w.terminate()}catch(e){}res(v)},to=setTimeout(()=>done(null),180000);
+  w.onmessage=e=>done(e.data&&e.data.ok&&e.data.ticks.length>8?e.data:null);w.onerror=()=>done(null);
+  let x=sr===44100?y.slice():resample(y,sr/44100);w.postMessage({y:x,base:ESS,method:x.length>44100*240?"degara":"multifeature"},[x.buffer])})}
+async function secondOpinion(){const tok=S.name+S.dur;$("finder").options[2].textContent="Essentia (checking…)";
+  const r=S.dur<=420?await essentiaBeats(S.y,S.sr):null;if(tok!==S.name+S.dur)return;const o=$("finder").options[2];
+  if(!r){o.textContent="Essentia (unavailable)";o.disabled=true;if($("finder").value==="auto")status("");return}
+  S.bES=r.ticks.filter(t=>t>=0&&t<S.dur);o.textContent="Essentia";o.disabled=false;
+  const a=gridScore(S.bSM),b=gridScore(S.bES);if($("finder").value==="auto"&&b>a*1.02&&S.src==="sm"){applyBeats(S.bES,"ess");toast("Essentia found a tighter beat grid, switched to it")}
+  status(`Beat fit: Sample Machine ${a.toFixed(2)} · Essentia ${b.toFixed(2)} (higher is tighter)`)}
 function rank(){const all=chopSet(S.bars),sc=[...all].sort((a,b)=>b.score-a.score);S.best=sc.slice(0,Math.max(6,Math.floor(sc.length/3)));const bi=new Set(S.best.map(c=>c.id));S.weird=sc.filter(c=>!bi.has(c.id)).slice(-8).reverse()}
 function byId(id){if(id.startsWith("os_"))return S.shots.find(s=>s.id===id);const[b,n]=id.slice(1).split("_").map(Number);return chopSet(b)[n-1]}
 function tabItems(){switch(S.tab){case"best":return S.best;case"weird":return S.weird;case"all":return chopSet(S.bars);case"shots":return S.shots;case"favs":return[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean)}return[]}
@@ -312,9 +347,16 @@ function ac(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();
 function unlock(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopPlay()});
 /* sample-accurate looping: the buffer repeats with no gap */
-function play(it,loop){stopPlay();unlock();const r=render(it),c=ac(),b=c.createBuffer(r.chs.length,r.seg.length,S.sr);r.chs.forEach((x,i)=>b.copyToChannel(x,i));const src=c.createBufferSource();src.buffer=b;src.loop=loop;src.connect(c.destination);src.start();
-  cur={id:it.id,src,t0:c.currentTime,len:b.duration,loop,s:r.s,e:r.e,rev:P(it.id).rev};src.onended=()=>{if(cur&&cur.src===src){cur=null;playUI()}};playUI();cancelAnimationFrame(raf);raf=requestAnimationFrame(anim)}
-function stopPlay(){if(cur){try{cur.src.stop()}catch(e){}cur=null}playUI()}
+function play(it,loop){stopPlay();unlock();const r=render(it),c=ac(),b=c.createBuffer(r.chs.length,r.seg.length,S.sr);r.chs.forEach((x,i)=>b.copyToChannel(x,i));const src=c.createBufferSource();src.buffer=b;src.loop=loop;src.connect(c.destination);
+  const t0=c.currentTime+.03;src.start(t0);cur={id:it.id,src,t0,len:b.duration,loop,s:r.s,e:r.e,rev:P(it.id).rev,per:it.kind==="chop"?60/P(it.id).bpm:0};clickStart();src.onended=()=>{if(cur&&cur.src===src){cur=null;playUI()}};playUI();cancelAnimationFrame(raf);raf=requestAnimationFrame(anim)}
+function stopPlay(){clickStop();if(cur){try{cur.src.stop()}catch(e){}cur=null}playUI()}
+/* metronome on the exact grid the loop will sit on in a DAW: if the drums and the click agree, the loop is right */
+let clk=null,cbuf=null;
+function clickBuf(c,hz){const n=Math.floor(c.sampleRate*.03),b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.sin(2*Math.PI*hz*i/c.sampleRate)*Math.exp(-i/(c.sampleRate*.006))*.6;return b}
+function clickStart(){clickStop();if(!S.click||!cur||!cur.loop||!cur.per)return;const c=ac();if(!cbuf)cbuf=[clickBuf(c,1500),clickBuf(c,2600)];const bpl=Math.max(1,Math.round(cur.len/cur.per));let g=0;const srcs=[];
+  const tickFn=()=>{if(!cur)return;while(true){const t=cur.t0+Math.floor(g/bpl)*cur.len+(g%bpl)*cur.per;if(t>c.currentTime+.15)break;if(t>=c.currentTime-.01){const s=c.createBufferSource();s.buffer=cbuf[(g%bpl)%4===0?1:0];s.connect(c.destination);s.start(t);srcs.push(s);if(srcs.length>32)srcs.shift()}g++}};
+  tickFn();clk={id:setInterval(tickFn,25),srcs}}
+function clickStop(){if(clk){clearInterval(clk.id);for(const s of clk.srcs)try{s.stop()}catch(e){}clk=null}}
 function anim(){drawMap();if(cur)raf=requestAnimationFrame(anim)}
 function playUI(){for(const el of document.querySelectorAll(".pad")){const on=cur&&cur.id===el.dataset.id;el.classList.toggle("on",!!on);const b=el.querySelector(".play");b.innerHTML=on?ICON.stop:ICON.play;b.setAttribute("aria-label",on?"Stop":"Play loop")}
   const on=cur&&S.sel&&cur.id===S.sel.id&&cur.loop;$("ploop").innerHTML=(on?ICON.stop+"Stop loop":ICON.play+"Loop");drawMap()}
@@ -327,7 +369,7 @@ function drawMap(){const cv=$("map");if(!S.wave)return;const[g,W,H,d]=fit(cv);g.
   if(S.sel){g.fillStyle=hot+"aa";g.fillRect(X(S.sel.start),0,Math.max(2,X(S.sel.end)-X(S.sel.start)),H)}
   g.fillStyle="#d9d3c9";for(let i=0;i<w.length;i++){const x=i/w.length*W,h=Math.max(1,w[i]*mid*.92);g.fillRect(x,mid-h,Math.max(1,W/w.length),h*2)}
   if(!S.busy&&S.tab!=="shots"){g.fillStyle="rgba(255,255,255,.22)";for(const c of chopSet(S.bars))g.fillRect(X(c.start),0,d,H)}
-  if(cur&&ctx){const el=(ctx.currentTime-cur.t0)/cur.len,fr=cur.loop?el%1:Math.min(1,el),t=cur.rev?cur.e-fr*(cur.e-cur.s):cur.s+fr*(cur.e-cur.s);g.fillStyle=go;g.fillRect(X(t)-d,0,2*d,H)}}
+  if(cur&&ctx){const el=(ctx.currentTime-cur.t0)/cur.len,fr=Math.max(0,cur.loop?el%1:Math.min(1,el)),t=cur.rev?cur.e-fr*(cur.e-cur.s):cur.s+fr*(cur.e-cur.s);g.fillStyle=go;g.fillRect(X(t)-d,0,2*d,H)}}
 function drawPad(cv,it){const[g,W,H]=fit(cv);const y=S.y,a=Math.floor(it.start*S.sr),b=Math.floor(it.end*S.sr),n=Math.max(1,W),per=(b-a)/n,st=Math.max(1,Math.floor(per/24));g.fillStyle=it.kind==="os"?"#f08a78":"#bdb6ab";
   for(let i=0;i<n;i++){let m=0;const s=a+Math.floor(i*per),e=Math.min(b,s+Math.ceil(per));for(let j=s;j<e;j+=st)m=Math.max(m,Math.abs(y[j]));const h=Math.max(1,m*H*.48);g.fillRect(i,H/2-h,1,h*2)}}
 const fmt=t=>`${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,"0")}`;
@@ -336,7 +378,7 @@ const fmt=t=>`${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,"0")}`;
 function status(m){$("status").textContent=m}
 function refresh(){if(S.busy)return;rank();const its=tabItems(),pads=$("pads");
   if(!its.length){pads.innerHTML=`<div class="empty">${S.tab==="favs"?"No favorites yet. Tap the heart on a pad and it lands here.":"Nothing here at this bar length. Try a shorter one."}</div>`}
-  else pads.innerHTML=its.map(it=>{const f=favs.has(fk(it.id));const tag=it.kind==="os"?"One-shot":S.tab==="favs"?it.id.slice(1).split("_")[0]+" bar":"";return`<div class="pad" role="button" tabindex="0" data-id="${esc(it.id)}" aria-current="${S.sel&&S.sel.id===it.id}"><div class="ptop"><span class="pn">${it.n}</span><span class="tag">${esc(tag)}</span><span class="pt">${fmt(it.start)}</span></div><canvas></canvas><div class="pbot"><button class="ib play" aria-label="Play loop">${ICON.play}</button><button class="ib heart" aria-pressed="${f}" aria-label="Favorite">${f?ICON.heartOn:ICON.heart}</button></div></div>`}).join("");
+  else pads.innerHTML=its.map(it=>{const f=favs.has(fk(it.id));const tag=it.kind==="os"?"One-shot":it.shaky?"Check beat":S.tab==="favs"?it.id.slice(1).split("_")[0]+" bar":"";return`<div class="pad" role="button" tabindex="0" data-id="${esc(it.id)}" aria-current="${S.sel&&S.sel.id===it.id}"><div class="ptop"><span class="pn">${it.n}</span><span class="tag">${esc(tag)}</span><span class="pt">${fmt(it.start)}</span></div><canvas></canvas><div class="pbot"><button class="ib play" aria-label="Play loop">${ICON.play}</button><button class="ib heart" aria-pressed="${f}" aria-label="Favorite">${f?ICON.heartOn:ICON.heart}</button></div></div>`}).join("");
   for(const el of pads.querySelectorAll(".pad"))drawPad(el.querySelector("canvas"),byId(el.dataset.id));
   playUI();drawMap()}
 function toggleFav(id){const k=fk(id);favs.has(k)?favs.delete(k):favs.add(k);saveFavs();if(S.tab==="favs")refresh();else{const el=document.querySelector(`.pad[data-id="${CSS.escape(id)}"] .heart`);if(el){const f=favs.has(k);el.setAttribute("aria-pressed",f);el.innerHTML=f?ICON.heartOn:ICON.heart}}heartUI()}
@@ -364,8 +406,17 @@ $("pads").addEventListener("keydown",e=>{const el=e.target.closest(".pad");if(el
 document.addEventListener("keydown",e=>{if(e.key===" "&&S.sel&&!e.target.closest(".pad,button,input")){e.preventDefault();$("ploop").click()}});
 $("bars").addEventListener("click",e=>{const b=e.target.closest("button");if(!b||S.busy)return;S.bars=Number(b.dataset.b);for(const x of $("bars").children)x.setAttribute("aria-pressed",x===b);if(S.sel&&S.sel.kind==="chop"&&S.tab!=="favs"){S.sel=null;closeEditor()}refresh()});
 $("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.tab=b.dataset.t;for(const x of $("tabs").children)x.setAttribute("aria-pressed",x===b);refresh()});
-$("map").addEventListener("click",e=>{if(S.busy||!S.wave)return;const r=e.currentTarget.getBoundingClientRect(),t=(e.clientX-r.left)/r.width*S.dur,list=[...tabItems(),...chopSet(S.bars)],it=list.find(i=>t>=i.start&&t<i.end);if(it){select(it);play(it,true)}});
-$("half").onclick=()=>!S.busy&&setBpm(S.bpm/2);$("dbl").onclick=()=>!S.busy&&setBpm(S.bpm*2);const setTarget=v=>{if(S.busy)return;S.tb=Math.max(40,Math.min(220,v));S.params={};S.cache.clear();$("bpm").textContent=S.tb;if(S.sel)openEditor();refresh()};$("dn").onclick=()=>setTarget(S.tb-1);$("up").onclick=()=>setTarget(S.tb+1);
+$("map").addEventListener("click",e=>{if(S.busy||!S.wave)return;const r=e.currentTarget.getBoundingClientRect(),t=(e.clientX-r.left)/r.width*S.dur;
+  if(S.setOne){let bi=0;S.beats.forEach((b,i)=>{if(Math.abs(b-t)<Math.abs(S.beats[bi]-t))bi=i});S.setOne=false;$("setone").setAttribute("aria-pressed",false);applyBeats(S.beats,S.src,false,bi%4);$("grid").textContent+=" · beat 1 set by you";toast("Beat 1 set at "+fmt(S.beats[bi]));return}
+  const list=[...tabItems(),...chopSet(S.bars)],it=list.find(i=>t>=i.start&&t<i.end);if(it){select(it);play(it,true)}});
+$("half").onclick=()=>{if(!S.busy&&S.beats)applyBeats(halfBeats(S.beats),S.src)};$("dbl").onclick=()=>{if(!S.busy&&S.beats)applyBeats(doubleBeats(S.beats),S.src)};
+$("finder").onchange=e=>{if(S.busy)return;const v=e.target.value;if(v==="sm")applyBeats(S.bSM,"sm");else if(v==="ess"&&S.bES)applyBeats(S.bES,"ess");else{const b=S.bES&&gridScore(S.bES)>gridScore(S.bSM)*1.02;applyBeats(b?S.bES:S.bSM,b?"ess":"sm")}};
+$("setone").onclick=()=>{S.setOne=!S.setOne;$("setone").setAttribute("aria-pressed",S.setOne);if(S.setOne)toast("Tap the waveform where beat 1 of a bar hits")};
+let taps=[],tapT;$("tap").onclick=()=>{if(S.busy)return;const now=performance.now();if(taps.length&&now-taps[taps.length-1]>2000)taps=[];taps.push(now);
+  if(taps.length>=3){const d=[];for(let i=1;i<taps.length;i++)d.push(taps[i]-taps[i-1]);d.sort((a,b)=>a-b);const b=60000/d[d.length>>1];$("bpm").textContent=Math.round(b);
+    clearTimeout(tapT);tapT=setTimeout(()=>{if(taps.length>=4){applyBeats(trackBeats(S.env,S.sr/HOP,b),"tap");toast("Beat grid rebuilt from your taps")}taps=[]},1500)}else $("bpm").textContent="tap…"};
+$("click").onclick=()=>{S.click=!S.click;$("click").setAttribute("aria-pressed",S.click);if(cur)S.click?clickStart():clickStop()};
+const nudge=k=>{const p=P(S.sel.id);p.shift=Math.max(-4,Math.min(4,+(p.shift+k*60/S.bpm).toFixed(3)));$("shift").value=p.shift;changed()};$("bm").onclick=()=>nudge(-1);$("bp").onclick=()=>nudge(1);const setTarget=v=>{if(S.busy)return;S.tb=Math.max(40,Math.min(220,v));S.params={};S.cache.clear();$("bpm").textContent=S.tb;if(S.sel)openEditor();refresh()};$("dn").onclick=()=>setTarget(S.tb-1);$("up").onclick=()=>setTarget(S.tb+1);
 async function packs(kind){if(S.busy)return;status("Building pack…");await tick();let files=[],fn;
   if(kind==="fav"){const its=[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean);if(!its.length){status("");toast("No favorites yet");return}files=its.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}});fn="favorites"}
   else if(kind==="os"){files=S.shots.map(it=>{const r=render(it);return{name:r.name+".wav",data:wav(r.chs,S.sr,r.meta)}});fn="oneshots"}
