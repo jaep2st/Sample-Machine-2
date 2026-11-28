@@ -42,8 +42,8 @@ header p{margin:4px 0 0;color:var(--mute)}
 .prolist{margin:0 0 14px;padding-left:1.2em;line-height:1.55}
 .proprice{font-size:18px;font-weight:800;margin:0 0 10px}.profine{color:var(--mute);font-size:14px;margin:8px 0 0}
 .probuy{width:100%;justify-content:center;min-height:52px;font-size:18px;text-decoration:none}
-.prokeyd{margin-top:12px}.prosteps{margin:4px 0 8px;padding-left:22px;display:grid;gap:10px}.prosteps .btn{margin:2px 6px 2px 0;text-decoration:none;color:inherit}.prosteps .btn.red{color:#fff}.prokeyd summary{cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center}
-.prokeyrow{display:flex;gap:8px}.prokeyrow input{flex:1;min-width:0;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 10px;font:inherit}
+.prokeyd{margin-top:12px}.prokeyd summary{cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center}
+.prokeyrow{display:flex;gap:8px}.prokeyrow[hidden]{display:none}.prokeyrow+.prokeyrow{margin-top:8px}.prokeyrow input{flex:1;min-width:0;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 10px;font:inherit}
 .prost{min-height:1.4em;margin:8px 0 0;font-size:15px}.proclose{position:absolute;top:12px;right:12px}
 .linkbtn{background:none;border:0;padding:0;color:inherit;text-decoration:underline;font:inherit;cursor:pointer}
 .protag{font-size:11px;font-weight:900;letter-spacing:.05em;border-radius:5px;padding:1px 5px;background:var(--ink);color:var(--bg);margin-left:6px;vertical-align:2px}
@@ -199,12 +199,12 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <a class="btn red probuy" id="probuy" href="#" target="_blank" rel="noopener">Get Pro</a>
       <p class="profine" id="profine"></p>
       <details class="prokeyd" id="prokeyd"><summary>Already bought? Unlock Pro</summary>
-        <ol class="prosteps">
-          <li><a class="btn" id="progetkey" href="#" target="_blank" rel="noopener">Get my key</a> Sign in with the email you paid with, then tap <b>Copy</b> next to your key.</li>
-          <li>Come back here and tap <button class="btn red" id="propaste">Paste &amp; unlock</button></li>
-        </ol>
+        <p class="profine">Type the email you paid with. We'll email you a 6-digit code.</p>
+        <div class="prokeyrow"><input id="proemail" type="email" placeholder="Email you paid with" autocomplete="email" inputmode="email"><button class="btn" id="prosend">Send code</button></div>
+        <div class="prokeyrow" id="procoderow" hidden><input id="procode" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" maxlength="6"><button class="btn red" id="prologin">Unlock</button></div>
         <p class="prost" id="prost" role="status"></p>
-        <details class="prokeyd" id="prokeyman"><summary>Paste didn't work? Type or paste it here</summary>
+        <details class="prokeyd" id="prokeyman"><summary>Other ways to unlock</summary>
+          <p class="profine"><a id="progetkey" href="#" target="_blank" rel="noopener">See your key in your Polar account</a>, copy it, then <button class="linkbtn" id="propaste">paste &amp; unlock</button>.</p>
           <div class="prokeyrow"><input id="prokey" placeholder="PF-…" autocomplete="off" spellcheck="false"><button class="btn" id="proact">Unlock</button></div>
         </details>
       </details>
@@ -1100,10 +1100,18 @@ async function proApi(action,body){try{const r=await fetch("/api/pro/"+action,{m
   return{status:r.status,data:await r.json().catch(()=>({}))}}catch(e){return{status:0,data:{error:"Couldn't reach the server. Check your connection and try again."}}}}
 async function useKey(key){const err=await licActivate(key);if(err){$("prost").textContent=err;return false}
   $("prost").textContent="";proUi();hidePro();toast("Pro unlocked. Welcome!");return true}
-function askKey(msg){showPro("");$("prokeyd").open=true;$("prost").textContent=msg}
+function askKey(msg){showPro("");$("prokeyd").open=true;$("prost").textContent=msg;setTimeout(()=>$("proemail").focus(),60)}
+$("prosend").onclick=async()=>{const b=$("prosend"),email=$("proemail").value.trim();if(!email){$("prost").textContent="Type the email you paid with.";return}
+  b.disabled=true;$("prost").textContent="Sending…";const r=await proApi("code",{email});b.disabled=false;
+  if(r.data.sent){$("procoderow").hidden=false;b.textContent="Resend";$("prost").textContent="Code sent to "+email+". It can take a minute, and check spam.";setTimeout(()=>$("procode").focus(),60)}
+  else $("prost").textContent=r.data.error||"Couldn't send the code. Try again in a minute."};
+$("prologin").onclick=async()=>{const b=$("prologin");b.disabled=true;$("prost").textContent="Unlocking…";const r=await proApi("login",{email:$("proemail").value,code:$("procode").value});
+  if(r.data.key)await useKey(r.data.key);else $("prost").textContent=r.data.error||"That didn't work. Try again.";b.disabled=false};
+$("procode").addEventListener("input",e=>{const v=e.target.value.replace(/\D/g,"").slice(0,6);e.target.value=v;if(v.length===6)$("prologin").click()});
+$("proemail").addEventListener("keydown",e=>{if(e.key==="Enter")$("prosend").click()});
 $("propaste").onclick=async()=>{let t="";try{t=await navigator.clipboard.readText()}catch(e){}
   const m=(t||"").match(/[A-Z0-9]{2,8}-[A-F0-9-]{20,}/i);
-  if(!m){$("prokeyman").open=true;$("prost").textContent="Couldn't read a key from your clipboard. Tap Copy next to your key first, or paste it in the box below.";setTimeout(()=>$("prokey").focus(),60);return}
+  if(!m){$("prost").textContent="Couldn't read a key from your clipboard. Paste it in the box instead.";setTimeout(()=>$("prokey").focus(),60);return}
   $("prokey").value=m[0];$("prost").textContent="Checking your key…";await useKey(m[0])};
 /* back from checkout: Polar adds ?checkout_id=… (set the checkout link's success URL to https://producerface.com/?checkout_id={CHECKOUT_ID}) */
 async function claimPurchase(){const u=new URL(location.href),id=u.searchParams.get("checkout_id");if(!id||BETA)return;
@@ -1113,7 +1121,7 @@ async function claimPurchase(){const u=new URL(location.href),id=u.searchParams.
     if(r.data.key){$("prohave").lastElementChild.hidden=false;$("prohave").firstElementChild.textContent="Pro is unlocked on this device. Thank you!";proUi();if(await useKey(r.data.key))return;$("prokeyd").open=true;return}
     if(!r.data.pending)break;await new Promise(res=>setTimeout(res,2000))}
   $("prohave").lastElementChild.hidden=false;$("prohave").firstElementChild.textContent="Pro is unlocked on this device. Thank you!";proUi();
-  askKey("Payment received. Tap Get my key, sign in with the email you paid with, copy your key, then tap Paste & unlock.")}
+  askKey("Payment received! Type the email you paid with and we'll send you a code to unlock.")}
 /* another tab unlocked Pro (checkout opens in a new tab): update this one too */
 addEventListener("storage",e=>{if(e.key===LKEY)proUi()});
 $("proout").onclick=async()=>{if(confirm("Remove your Pro key from this device? You can enter it again any time."))await licRemove()};

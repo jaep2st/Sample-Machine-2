@@ -33,13 +33,19 @@ How the app uses it: the customer pastes their key, the app calls Polar's public
 5. `_headers` adds basic security headers.
 6. When the Cloudflare site works: turn off GitHub Pages (repo Settings → Pages), and consider making the repo private.
 
-## 2b. Key-free unlock (buyers never copy a key)
+## 2b. Key-free unlock (buyers never see a key or a payment page)
 
-1. Polar: Products > Checkout Links > Pro > set **Success URL** to `https://producerface.com/?checkout_id={CHECKOUT_ID}`.
-2. Polar: Settings > Access Tokens > New token, scopes **checkouts:read** and **customer_sessions:write**, no expiry. Copy it.
-3. Cloudflare: Workers & Pages > producerface > Settings > Variables and secrets > Add, type **Secret**, name `POLAR_TOKEN`, paste the token. Then Deployments > latest > Retry deployment.
+1. Polar: Products > Checkout Links > Pro > **Success URL** = `https://producerface.com/?checkout_id={CHECKOUT_ID}`.
+2. Polar: Settings > Access Tokens > New token, no expiry, scopes **checkouts:read**, **customer_sessions:write**, **customers:read**.
+3. Resend (resend.com, free): add domain **producerface.com** (let it set up Cloudflare DNS), then API Keys > Create (sending access).
+4. Cloudflare: Storage & Databases > KV > Create namespace `producerface-codes`.
+5. Cloudflare: Workers & Pages > producerface > Settings:
+   - Variables and secrets: `POLAR_TOKEN` (Secret) and `RESEND_KEY` (Secret)
+   - Bindings: KV namespace, variable name `PF_KV`, namespace `producerface-codes`
+   - then Deployments > latest > Retry deployment.
 
-Without the token, buyers still unlock with "Already bought? Unlock Pro" (email + code) or by pasting the key.
+After buying: Pro unlocks by itself. New phone: "Already bought? Unlock Pro" > email > 6-digit code from help@producerface.com.
+Backup: "Other ways to unlock" (key from the Polar portal).
 
 ## 3. Support email
 
