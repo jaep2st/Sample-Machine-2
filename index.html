@@ -198,9 +198,14 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <p class="proprice" id="proprice"></p>
       <a class="btn red probuy" id="probuy" href="#" target="_blank" rel="noopener">Get Pro</a>
       <p class="profine" id="profine"></p>
-      <details class="prokeyd" id="prokeyd"><summary>Already bought? Enter your license key</summary>
-        <div class="prokeyrow"><input id="prokey" placeholder="Paste your license key" autocomplete="off" spellcheck="false"><button class="btn" id="proact">Unlock</button></div>
+      <details class="prokeyd" id="prokeyd"><summary>Already bought? Unlock Pro</summary>
+        <p class="profine">Type the email you paid with. We'll email you a code.</p>
+        <div class="prokeyrow"><input id="proemail" type="email" placeholder="Email you paid with" autocomplete="email" inputmode="email"><button class="btn" id="prosend">Send code</button></div>
+        <div class="prokeyrow" id="procoderow" hidden><input id="procode" placeholder="Code from the email" autocomplete="one-time-code" inputmode="text" spellcheck="false"><button class="btn" id="prologin">Unlock</button></div>
         <p class="prost" id="prost" role="status"></p>
+        <details class="prokeyd"><summary>Or paste a license key</summary>
+          <div class="prokeyrow"><input id="prokey" placeholder="Paste your license key" autocomplete="off" spellcheck="false"><button class="btn" id="proact">Unlock</button></div>
+        </details>
       </details>
     </div>
     <div id="prohave" hidden><p class="proprice">Pro is unlocked on this device. Thank you!</p><p class="profine"><a id="proportal" href="#" target="_blank" rel="noopener">Manage or cancel your plan</a> · <button class="linkbtn" id="proout">Remove key from this device</button></p></div>
@@ -1089,11 +1094,36 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("prosheet").hidd
 $("probuy").addEventListener("click",e=>{if(!CFG.checkout){e.preventDefault();toast("Checkout isn't set up yet")}});
 $("proact").onclick=async()=>{const b=$("proact");b.disabled=true;$("prost").textContent="Checking your key…";const err=await licActivate($("prokey").value);b.disabled=false;
   if(err){$("prost").textContent=err;return}$("prost").textContent="";proUi();hidePro();toast("Pro unlocked. Thank you!")};
+/* key-free unlock: our own server function (functions/api/pro) fetches the buyer's key for them */
+async function proApi(action,body){try{const r=await fetch("/api/pro/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  return{status:r.status,data:await r.json().catch(()=>({}))}}catch(e){return{status:0,data:{error:"Couldn't reach the server. Check your connection and try again."}}}}
+async function useKey(key){const err=await licActivate(key);if(err){$("prost").textContent=err;return false}
+  $("prost").textContent="";proUi();hidePro();toast("Pro unlocked. Welcome!");return true}
+function askEmail(msg){showPro("");$("prokeyd").open=true;$("prost").textContent=msg;setTimeout(()=>$("proemail").focus(),60)}
+$("prosend").onclick=async()=>{const b=$("prosend"),email=$("proemail").value.trim();if(!email){$("prost").textContent="Type the email you paid with.";return}
+  b.disabled=true;$("prost").textContent="Sending…";const r=await proApi("code",{email});b.disabled=false;
+  if(r.data.sent){$("procoderow").hidden=false;b.textContent="Resend";$("prost").textContent="Check your email (and spam) for the code, then type it here.";setTimeout(()=>$("procode").focus(),60)}
+  else $("prost").textContent=r.data.error||"Couldn't send the code. Try again."};
+$("prologin").onclick=async()=>{const b=$("prologin");b.disabled=true;$("prost").textContent="Unlocking…";const r=await proApi("login",{code:$("procode").value});
+  if(r.data.key)await useKey(r.data.key);else $("prost").textContent=r.data.error||"That didn't work. Try again.";b.disabled=false};
+$("procode").addEventListener("keydown",e=>{if(e.key==="Enter")$("prologin").click()});
+$("proemail").addEventListener("keydown",e=>{if(e.key==="Enter")$("prosend").click()});
+/* back from checkout: Polar adds ?checkout_id=… (set the checkout link's success URL to https://producerface.com/?checkout_id={CHECKOUT_ID}) */
+async function claimPurchase(){const u=new URL(location.href),id=u.searchParams.get("checkout_id");if(!id||BETA)return;
+  u.searchParams.delete("checkout_id");history.replaceState(null,"",u.pathname+u.search+u.hash);if(isPro()){toast("Pro is unlocked. Welcome!");return}
+  showPro("Thanks for buying Pro!");$("prosell").hidden=true;$("prohave").hidden=false;$("prohave").firstElementChild.textContent="Unlocking Pro on this device…";$("prohave").lastElementChild.hidden=true;
+  for(let i=0;i<20;i++){const r=await proApi("claim",{checkout_id:id});
+    if(r.data.key){$("prohave").lastElementChild.hidden=false;$("prohave").firstElementChild.textContent="Pro is unlocked on this device. Thank you!";proUi();if(await useKey(r.data.key))return;$("prokeyd").open=true;return}
+    if(!r.data.pending)break;await new Promise(res=>setTimeout(res,2000))}
+  $("prohave").lastElementChild.hidden=false;$("prohave").firstElementChild.textContent="Pro is unlocked on this device. Thank you!";proUi();
+  askEmail("Payment received. To unlock, type the email you paid with and we'll send you a code.")}
+/* another tab unlocked Pro (checkout opens in a new tab): update this one too */
+addEventListener("storage",e=>{if(e.key===LKEY)proUi()});
 $("proout").onclick=async()=>{if(confirm("Remove your Pro key from this device? You can enter it again any time."))await licRemove()};
 /* first visit: a 3-step how-to, once */
 try{if(!localStorage.getItem("sm2-onboarded"))$("onboard").hidden=false}catch(e){}
 $("obok").onclick=()=>{$("onboard").hidden=true;try{localStorage.setItem("sm2-onboarded","1")}catch(e){}};
-proUi();licRecheck();
+proUi();licRecheck();claimPurchase();
 
 /* ---------- demo beat so the machine opens mid-use ---------- */
 function demo(){const sr=44100,bpm=92,beat=60/bpm,bars=16,n=Math.floor(bars*4*beat*sr),y=new Float32Array(n);let seed=7;const rnd=()=>(seed=seed*16807%2147483647)/2147483647*2-1;

@@ -24,3 +24,5 @@ jobs:
         run: node tests/flips.js
       - name: Check the Best tab picks
         run: node tests/best.js
+      - name: Check the key-free Pro unlock
+        run: node tests/pro.mjs

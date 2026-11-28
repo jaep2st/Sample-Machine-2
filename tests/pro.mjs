@@ -1,0 +1,23 @@
+import { onRequestPost } from "../functions/api/pro/[action].js";
+const ORG="cbc6d623-cf5e-4685-984a-88aab7e7e41f";let state="succeeded",keys=[{key:"PF-OLD",created_at:"2026-01-01T00:00:00Z",expires_at:"2026-02-01T00:00:00Z"},{key:"PF-NEW",created_at:"2026-11-28T00:00:00Z",expires_at:null}];const log=[];
+globalThis.fetch=async(url,o)=>{log.push(o.method+" "+url.replace("https://api.polar.sh/v1",""));const j=(s,b)=>new Response(JSON.stringify(b),{status:s});
+ if(url.includes("/checkouts/"))return o.headers.Authorization==="Bearer TOK"?j(200,{organization_id:ORG,status:state,customer_id:"cus1"}):j(401,{});
+ if(url.endsWith("/customer-sessions/"))return j(201,{token:"polar_cst_x"});
+ if(url.includes("/customer-portal/license-keys/"))return o.headers.Authorization==="Bearer polar_cst_x"?j(200,{items:keys}):j(401,{});
+ if(url.endsWith("/customer-session/request"))return new Response(null,{status:202});
+ if(url.endsWith("/customer-session/authenticate"))return JSON.parse(o.body).code==="ABC123"?j(200,{token:"polar_cst_x"}):j(401,{detail:"bad"});
+ return j(404,{})};
+const req=(a,b,env={POLAR_TOKEN:"TOK"})=>onRequestPost({params:{action:a},request:new Request("https://x/",{method:"POST",body:JSON.stringify(b)}),env}).then(async r=>[r.status,await r.json()]);
+const id="11111111-2222-3333-4444-555555555555";
+console.log("claim ok",await req("claim",{checkout_id:id}));
+state="open";console.log("claim pending",await req("claim",{checkout_id:id}));state="succeeded";
+console.log("claim no token",await req("claim",{checkout_id:id},{}));
+console.log("claim bad id",await req("claim",{checkout_id:"x"}));
+console.log("code",await req("code",{email:"a@b.com"}),await req("code",{email:"nope"}));
+console.log("login ok",await req("login",{code:"ABC123"}),"bad",await req("login",{code:"ZZZ999"}));
+keys=[];console.log("login no plan",await req("login",{code:"ABC123"}));
+console.log("unknown",await req("hack",{}));
+// pass/fail for CI
+state="succeeded";keys=[{key:"PF-NEW",created_at:"2026-11-28T00:00:00Z",expires_at:null}];
+const ok=(await req("claim",{checkout_id:id}))[1].key==="PF-NEW"&&(await req("login",{code:"ABC123"}))[1].key==="PF-NEW"&&(await req("login",{code:"ZZZ999"}))[0]===401&&(await req("claim",{checkout_id:id},{}))[0]===503;
+console.log(ok?"PRO UNLOCK: PASS":"PRO UNLOCK: FAIL");process.exit(ok?0:1);
