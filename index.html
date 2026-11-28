@@ -267,7 +267,15 @@ function stretchApply(x,plan){const N=2048,Hs=1024,w=hann(N),{pos,outLen}=plan,o
 function mono(xs){if(xs.length===1)return xs[0];const o=new Float32Array(xs[0].length);for(const x of xs)for(let i=0;i<o.length;i++)o[i]+=x[i]/xs.length;return o}
 function stretch(xs,rate){if(Math.abs(rate-1)<1e-3||xs[0].length<4096)return xs;const plan=stretchPlan(mono(xs),rate);return xs.map(x=>stretchApply(x,plan))}
 function normAll(xs){let m=0;for(const x of xs)for(const v of x)m=Math.max(m,Math.abs(v));if(m>0){const g=0.92/m;for(const x of xs)for(let i=0;i<x.length;i++)x[i]*=g}return xs}
-function resample(x,f){if(f===1)return x;const n=Math.floor(x.length/f),o=new Float32Array(n);for(let i=0;i<n;i++){const p=i*f,a=Math.floor(p),t=p-a;o[i]=(x[a]||0)*(1-t)+(x[a+1]||0)*t}return o}
+/* windowed-sinc resampler, the method good samplers use: clean highs when pitching up or down, and when speeding up it
+   filters out what would fold back as harsh aliasing. f > 1 = faster and higher. Kernel is tabled by fractional phase for speed; edges hold their last value so pieces don't fade at their ends. */
+const sincC={};
+function sincTable(cut,Z){const k=cut.toFixed(4)+"_"+Z;if(sincC[k])return sincC[k];const W=Math.ceil(Z/cut),P=512,T=new Float32Array((P+1)*2*W);
+  for(let ph=0;ph<=P;ph++){const fr=ph/P;for(let j=0;j<2*W;j++){const d=(j-W+1)-fr,u=d/W;let v=0;if(Math.abs(u)<1){const sx=cut*d;v=cut*(sx===0?1:Math.sin(Math.PI*sx)/(Math.PI*sx))*(.42+.5*Math.cos(Math.PI*u)+.08*Math.cos(2*Math.PI*u))}T[ph*2*W+j]=v}}
+  return sincC[k]={T,W,P}}
+function resample(x,f){if(f===1)return x;const n=Math.floor(x.length/f),o=new Float32Array(n),cut=Math.min(1,.9/f),{T,W,P}=sincTable(cut,12),L=x.length;
+  for(let i=0;i<n;i++){const p=i*f,a=Math.floor(p),fr=p-a,row=Math.round(fr*P)*2*W;let s=0;const b=a-W+1;
+    if(b>=0&&b+2*W<=L){for(let j=0;j<2*W;j++)s+=x[b+j]*T[row+j]}else for(let j=0;j<2*W;j++){const q=Math.min(L-1,Math.max(0,b+j));s+=x[q]*T[row+j]}o[i]=s}return o}
 function makeLoop(chs,sr,reps=4){return chs.map(seg=>{const o=new Float32Array(seg.length*reps);for(let r=0;r<reps;r++)o.set(seg,r*seg.length);return o})}
 
 /* ---------- files ---------- */

@@ -56,6 +56,13 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
   // stab kit: finds a real hit inside the chop
   const st = A.findStab(it);
   check(st.t >= it.start && st.t < it.end && st.len >= .12, `Stab Kit: picked a ${st.len.toFixed(2)} s hit inside the chop`);
+  // resampler (tape speed, pitch, kits): clean tones, no fold-back aliasing
+  { const tone = (hz, n) => Float32Array.from({ length: n }, (_, i) => Math.sin(2 * Math.PI * hz * i / sr) * .8);
+    const purity = (y, hz) => { const m = 4096, a = 2000; let c = 0, s = 0; for (let i = a; i < a + m; i++) { c += y[i] * Math.cos(2 * Math.PI * hz * i / sr); s += y[i] * Math.sin(2 * Math.PI * hz * i / sr) } c *= 2 / m; s *= 2 / m; let e = 0, t = 0; for (let i = a; i < a + m; i++) { const f = c * Math.cos(2 * Math.PI * hz * i / sr) + s * Math.sin(2 * Math.PI * hz * i / sr); e += (y[i] - f) ** 2; t += f * f } return 10 * Math.log10(e / t) };
+    const f = 2 ** (4 / 12), p9 = purity(A.resample(tone(9000, sr), f), 9000 * f);
+    const x = tone(18000, sr), y = A.resample(x, 2 ** (5 / 12)), lvl = 20 * Math.log10(Math.sqrt(y.slice(2000, 6000).reduce((a, v) => a + v * v, 0) / 4000) / Math.sqrt(x.slice(2000, 6000).reduce((a, v) => a + v * v, 0) / 4000));
+    check(p9 < -55, `resampler: a 9 kHz tone sped up 4 semitones stays clean (${p9.toFixed(1)} dB of artifacts)`);
+    check(lvl < -50, `resampler: no fold-back aliasing when speeding up (${lvl.toFixed(1)} dB)`) }
   // filters
   const x = A.S.ch[0].slice(0, sr * 2);
   check(hf(A.filt(x, "lp", 300, .8, sr)) < hf(x) * .05 && hf(A.filt(x, "hp", 2000, .7, sr)) > hf(x) * .3, "low-pass and high-pass filters behave");
