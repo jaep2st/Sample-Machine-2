@@ -87,18 +87,6 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 #modes button{font-weight:600}
 #kitpads button{min-height:52px;border-radius:10px;border:0;background:var(--pad);color:var(--padink);font-weight:800;cursor:pointer}
 #kitpads button:active{background:var(--hot)}
-.slwrap{border:1px solid var(--line);border-radius:12px;background:var(--pad);overflow:hidden;margin-bottom:8px}
-#slc{display:block;width:100%;height:170px;touch-action:none;cursor:pointer}
-.slsteps{margin:0 0 10px;padding-left:1.3em;font-size:15px;line-height:1.5}
-.sltrans{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px}
-.slchop{min-height:64px;font-size:22px;font-weight:900;letter-spacing:.06em}
-.slselrow{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:6px;align-items:center;margin-bottom:8px;font-weight:700;font-size:15px}
-.slmore summary{cursor:pointer;font-weight:700;padding:8px 0;min-height:44px}
-#slpos{width:100%;margin:0 0 8px}
-#slzoom{display:flex}#slzoom button{flex:1}
-#slpads{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;margin:4px 0 10px}
-#slpads button{min-height:40px;border-radius:8px;border:0;background:var(--pad);color:var(--padink);font-weight:800;cursor:pointer;font-size:14px}
-#slpads button:active{background:var(--hot)}
 .styles button[aria-pressed=true]{background:var(--hot);color:#fff;border-color:var(--hot)}
 .erow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .close{display:none}
@@ -216,20 +204,6 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <div id="kit" hidden style="margin:0 0 12px">
       <div id="kitpads" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px"></div>
       <div class="erow"><button class="btn" id="savekit">Save stab kit (8 pitched pads)</button><button class="btn" id="kitto">Send kit to pads</button></div>
-    </div>
-    <div class="erow" style="margin:0 0 12px"><button class="btn" id="slopen" aria-expanded="false">Chop it yourself</button></div>
-    <div id="slicer" hidden>
-      <ol class="slsteps"><li><b>Play</b> the chop.</li><li>Tap <b>CHOP</b> on each spot you want, in time, like tapping a pad.</li><li><b>Send to pads</b> and play your chops.</li></ol>
-      <div class="slwrap"><canvas id="slc" aria-label="Waveform of this chop. Tap to hear from that spot. Drag a red marker to move it."></canvas></div>
-      <input type="range" id="slpos" min="0" max="1000" value="0" aria-label="Scroll the waveform" hidden>
-      <div class="sltrans"><button class="btn" id="slplay">▶ Play</button><button class="btn red slchop" id="slchop">CHOP</button></div>
-      <div class="slselrow" id="slsel" hidden><span id="slselname">Point 2</span><button class="btn" id="slleft" aria-label="Move point earlier">◀ 5 ms</button><button class="btn" id="slright" aria-label="Move point later">5 ms ▶</button><button class="btn" id="sldel">Delete</button></div>
-      <div id="slpads"></div>
-      <div class="erow" style="margin-bottom:8px"><button class="btn red" id="slsend">Send to pads</button><button class="btn" id="slclr">Start over</button></div>
-      <details class="slmore"><summary>More options</summary>
-        <div style="margin:8px 0"><span class="seg" id="slzoom"><button data-z="1" aria-pressed="true">1×</button><button data-z="2">2×</button><button data-z="4">4×</button><button data-z="8">8×</button></span></div>
-        <div class="erow" style="margin-bottom:8px"><button class="btn" id="slsnap" aria-pressed="true">Snap CHOP to hits</button><button class="btn" id="slauto">Auto: every hit</button><button class="btn" id="sleven">Auto: even 8ths</button></div>
-      </details>
     </div>
     <div class="field"><label>Style</label></div>
     <div class="styles" id="styles"></div>
@@ -695,15 +669,15 @@ function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;d
   for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);
   for(const b of $("iso").children)b.setAttribute("aria-pressed",(p.iso||"full")===b.dataset.i);
   for(const b of $("modes").children)b.setAttribute("aria-pressed",!!p.mode&&MODES[b.dataset.m]&&MODES[b.dataset.m].name===p.mode);
-  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);if(SL.open)setTimeout(slLoad,0);
+  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);
   $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
-function closeEditor(){if(typeof SL!=='undefined')slStop();$("editor").hidden=true;document.body.classList.remove("sheet")}
+function closeEditor(){$("editor").hidden=true;document.body.classList.remove("sheet")}
 function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm;$("o_lpf").textContent=p.lp?(p.lp>=1000?(p.lp/1000).toFixed(1)+" kHz":p.lp+" Hz"):"off";$("o_hpf").textContent=p.hp?p.hp+" Hz":"off"}
 /* the key of this chop on its own: a sample can move key mid-song, so the chop can differ from the whole track */
 function chopKey(it){if(!S.ck||S.ck.y!==S.y)S.ck={y:S.y};if(it.kind==="os"||it.end-it.start<2.5)return null;if(!(it.id in S.ck))S.ck[it.id]=detectKey(S.y.subarray(Math.floor(it.start*S.sr),Math.floor(it.end*S.sr)),S.sr);return S.ck[it.id]}
 function chopKeyNote(it){const k=chopKey(it),p=P(it.id);if(!k)return"";const n=p.tape?Math.round(12*Math.log2((it.end-it.start)/(it.bars*4*60/p.bpm))):p.pitch||0;return` · Chop key ${shiftKey(k,n)}${k!==S.key?" (moves off the song key)":""}`}
 let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}${chopKeyNote(S.sel)}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
-function changed(){S.params[S.sel.id].rand=false;labels();estat();if(SL.open){clearTimeout(SL.t);SL.t=setTimeout(slLoad,250)}}
+function changed(){S.params[S.sel.id].rand=false;labels();estat()}
 let mseed=(Date.now()%2147483646)+1;const mr=()=>(mseed=mseed*16807%2147483647)/2147483647;
 /* proven chop rhythms, one bar of 16th notes each: x = hit a pad */
 const RHY=["x..x..x.x..x.x..","x.x...x.x.x...x.","x...x.x...x.x...","x..x...x..x.x...","x.x.x..x.x..x...","x...x..xx...x.x.","x..x..x...x..x..","x.xx..x.x..x..x.","x.......x..x....","x..x.x....x..x.."];
@@ -899,58 +873,6 @@ $("bbounce").onclick=()=>{if(!BT.events.length){toast("Program or record a patte
   saveZip(`${nm}_beat_${BT.bpm}bpm.zip`,[{name:`${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(out,sr,{bpm:BT.bpm,beats:BT.bars*4,root:Math.max(0,KEYS.indexOf((S.key||"C").split(" ")[0])),one:false})}])};
 $("topad").onclick=sendToPad;$("flipto").onclick=sendFlip;$("kitto").onclick=sendKit;
 renderBeat();
-
-/* ---------- chop it yourself: play it, tap CHOP in time, drag points to fine-tune ---------- */
-const SL={id:null,chs:null,len:0,marks:[0],hits:[],zoom:1,pos:0,snap:true,open:false,src:null,t0:0,from:0,cursor:0,sel:-1,drag:-1,moved:false,raf:0};
-function slLoad(){const it=S.sel;if(!it)return;slStop();const p=P(it.id),q={...p,flip:null},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
-  const L=r.chs[0].length,fr=SL.id===it.id&&SL.len?SL.marks.map(m=>m/SL.len):[0];SL.id=it.id;SL.chs=r.chs.map(x=>x.slice());SL.len=L;SL.buf=null;SL.sel=-1;
-  SL.hits=onsetsIn(mono(SL.chs),S.sr);SL.marks=[...new Set(fr.map(f=>Math.round(f*L)))].sort((a,b)=>a-b);if(SL.marks[0]!==0)SL.marks.unshift(0);slUi()}
-function slView(){const w=SL.len/SL.zoom,a=Math.round(SL.pos*(SL.len-w));return[a,a+w]}
-function slNow(){if(!SL.src)return SL.cursor;const c=ac();return Math.floor((SL.from+(c.currentTime-SL.t0)*S.sr)%SL.len)}
-function slDraw(){const cv=$("slc");if(!cv||!SL.chs)return;const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr}const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
-  const css=getComputedStyle(document.documentElement),ink=css.getPropertyValue("--padink")||"#eee",hot=css.getPropertyValue("--hot")||"#e33",go=css.getPropertyValue("--go")||"#2a8",[a,b]=slView(),x=SL.chs[0],y=SL.chs[SL.chs.length-1],spp=(b-a)/W;
-  /* shade alternate slices so each chop reads as its own block */
-  SL.marks.forEach((m,k)=>{const e=k+1<SL.marks.length?SL.marks[k+1]:SL.len;if(e<a||m>b||k%2)return;g.fillStyle="rgba(255,255,255,.07)";g.fillRect((m-a)/spp,0,(e-m)/spp,H)});
-  g.fillStyle=ink;g.globalAlpha=.8;if(!SL.wf||SL.wf.W!==W||SL.wf.a!==a||SL.wf.b!==b){const col=new Float32Array(W);for(let px=0;px<W;px++){let mx=0;const s0=Math.floor(a+px*spp),s1=Math.max(s0+1,Math.floor(a+(px+1)*spp));for(let i=s0;i<s1;i+=Math.max(1,(s1-s0)>>6)){const v=Math.abs(x[i]+y[i])/2;if(v>mx)mx=v}col[px]=mx}SL.wf={W,a,b,col}}
-  for(let px=0;px<W;px++){const h=Math.max(1,SL.wf.col[px]*(H-24)*.95);g.fillRect(px,(H+18-h)/2,1,h)}
-  g.globalAlpha=.4;const beat=SL.len/(4*Math.max(1,(S.sel&&S.sel.bars)||1));for(let t=0,k=0;t<SL.len;t+=beat,k++){if(t<a||t>b)continue;g.fillRect((t-a)/spp,18,1,k%4?6:12)}
-  g.globalAlpha=1;g.font="bold 13px system-ui";SL.marks.forEach((m,k)=>{if(m<a||m>b)return;const px=(m-a)/spp,on=k===SL.sel;g.fillStyle=on?go:hot;g.fillRect(px-(on?2:1),0,on?4:2,H);g.fillRect(px,0,22,18);g.fillStyle="#fff";g.fillText(k+1,px+4,14)});
-  const now=slNow();if(now>=a&&now<=b){g.fillStyle="#fff";g.fillRect((now-a)/spp-1,0,2,H)}}
-function slUi(){$("slpads").innerHTML=SL.marks.slice(0,16).map((m,k)=>`<button data-k="${k}" aria-label="Play slice ${k+1}"${k===SL.sel?' style="outline:3px solid var(--go)"':""}>${k+1}</button>`).join("");
-  $("slsend").textContent=`Send ${Math.min(16,SL.marks.length)} chop${SL.marks.length>1?"s":""} to pads`;$("slsel").hidden=SL.sel<=0;if(SL.sel>0)$("slselname").textContent=`Point ${SL.sel+1}`;slDraw()}
-function slTick(){slDraw();if(SL.src){if(SL.zoom>1){const [a,b]=slView(),n=slNow();if(n<a||n>b){SL.pos=Math.min(1,Math.max(0,n/(SL.len-(b-a))));$("slpos").value=SL.pos*1000}}SL.raf=requestAnimationFrame(slTick)}}
-function slPlay(from){slStop(true);stopPlay();const c=ac();if(!SL.buf){const b=c.createBuffer(2,SL.len,S.sr);for(let k=0;k<2;k++)b.copyToChannel(SL.chs[Math.min(k,SL.chs.length-1)],k);SL.buf=b}
-  const s=c.createBufferSource();s.buffer=SL.buf;s.loop=true;s.connect(c.destination);SL.from=from;SL.t0=c.currentTime+.02;s.start(SL.t0,from/S.sr);SL.src=s;$("slplay").textContent="■ Stop";cancelAnimationFrame(SL.raf);SL.raf=requestAnimationFrame(slTick)}
-function slStop(keep){if(SL.src){SL.cursor=slNow();try{SL.src.stop()}catch(e){}SL.src=null}if(!keep){const b=$("slplay");if(b)b.textContent="▶ Play";slDraw()}}
-function slSlice(k){const a=SL.marks[k],b=k+1<SL.marks.length?SL.marks[k+1]:SL.len,fo=Math.min(96,Math.floor((b-a)/4));return SL.chs.map(x=>{const o=x.slice(a,b);for(let i=0;i<fo;i++)o[o.length-1-i]*=i/fo;return o})}
-function slAudition(k){slStop();SL.cursor=SL.marks[k];playRaw(slSlice(k))}
-/* CHOP: drop a point where the music is right now, pulled back a touch for reaction time and onto the nearest hit */
-function slChop(){let t=SL.src?(slNow()-Math.round(.03*S.sr)+SL.len)%SL.len:SL.cursor;if(SL.snap){let best=null;for(const h of SL.hits)if(Math.abs(h-t)<.09*S.sr&&(best===null||Math.abs(h-t)<Math.abs(best-t)))best=h;if(best!==null)t=best}
-  if(t<.02*S.sr||SL.marks.some(m=>Math.abs(m-t)<.04*S.sr)){if(navigator.vibrate)navigator.vibrate(8);return}SL.marks.push(t);SL.marks.sort((x,y)=>x-y);SL.sel=SL.marks.indexOf(t);if(navigator.vibrate)navigator.vibrate(15);slUi()}
-function slSample(e){const cv=$("slc"),r=cv.getBoundingClientRect(),[a,b]=slView();return{s:Math.round(a+(e.clientX-r.left)/r.width*(b-a)),tol:16/r.width*(b-a)}}
-$("slc").addEventListener("pointerdown",e=>{e.preventDefault();const{s,tol}=slSample(e);let near=-1,bd=tol;SL.marks.forEach((m,k)=>{if(k>0&&Math.abs(m-s)<bd){bd=Math.abs(m-s);near=k}});
-  if(near>0){SL.drag=near;SL.sel=near;SL.moved=false;$("slc").setPointerCapture(e.pointerId);slUi();return}
-  SL.sel=-1;slUi();SL.cursor=Math.max(0,Math.min(SL.len-1,s));slPlay(SL.cursor)});
-$("slc").addEventListener("pointermove",e=>{if(SL.drag<0)return;const{s}=slSample(e),k=SL.drag,lo=SL.marks[k-1]+.02*S.sr,hi=(k+1<SL.marks.length?SL.marks[k+1]:SL.len)-.02*S.sr;SL.marks[k]=Math.round(Math.max(lo,Math.min(hi,s)));SL.moved=true;slDraw()});
-$("slc").addEventListener("pointerup",()=>{if(SL.drag<0)return;const k=SL.drag;SL.drag=-1;slUi();slAudition(k)});
-$("slplay").onclick=()=>SL.src?slStop():slPlay(SL.cursor||0);
-$("slchop").addEventListener("pointerdown",e=>{e.preventDefault();slChop()});
-const slNudge=d=>{const k=SL.sel;if(k<=0)return;const lo=SL.marks[k-1]+.02*S.sr,hi=(k+1<SL.marks.length?SL.marks[k+1]:SL.len)-.02*S.sr;SL.marks[k]=Math.round(Math.max(lo,Math.min(hi,SL.marks[k]+d*.005*S.sr)));slUi();slAudition(k)};
-$("slleft").onclick=()=>slNudge(-1);$("slright").onclick=()=>slNudge(1);
-$("sldel").onclick=()=>{if(SL.sel>0){SL.marks.splice(SL.sel,1);SL.sel=-1;slUi()}};
-$("slzoom").onclick=e=>{const b=e.target.closest("button");if(!b)return;SL.zoom=+b.dataset.z;for(const x of $("slzoom").children)x.setAttribute("aria-pressed",x===b);$("slpos").hidden=SL.zoom===1;slDraw()};
-$("slpos").oninput=e=>{SL.pos=e.target.value/1000;slDraw()};
-$("slsnap").onclick=()=>{SL.snap=!SL.snap;$("slsnap").setAttribute("aria-pressed",SL.snap)};
-$("slauto").onclick=()=>{SL.marks=SL.hits.slice(0,16);if(SL.marks[0]!==0)SL.marks.unshift(0);SL.marks=SL.marks.slice(0,16);SL.sel=-1;slUi()};
-$("sleven").onclick=()=>{const n=Math.min(16,8*Math.max(1,(S.sel&&S.sel.bars)||1));SL.marks=Array.from({length:n},(_,k)=>Math.round(k*SL.len/n));
-  if(SL.snap)SL.marks=SL.marks.map(m=>{let best=m;for(const h of SL.hits)if(Math.abs(h-m)<.03*S.sr&&Math.abs(h-m)<Math.abs(best-m))best=h;return best});SL.sel=-1;slUi()};
-$("slclr").onclick=()=>{SL.marks=[0];SL.sel=-1;slUi()};
-$("slpads").addEventListener("pointerdown",e=>{const b=e.target.closest("button");if(b){e.preventDefault();SL.sel=+b.dataset.k;slUi();slAudition(SL.sel)}});
-function slSend(){if(!SL.chs)return;slStop();const n=Math.min(16,SL.marks.length),it=S.sel,fresh=!BT.events.length;for(let k=0;k<n;k++)setPad(k,newPad(slSlice(k),`Chop ${k+1}`,"chop"));
-  if(fresh)setBbpm(P(it.id).bpm);BT.sel=0;renderBeat();toast(`${n} chops on pads 1–${n}. Tap them or use keys Q W E R…`);$("editor").hidden=true;document.body.classList.remove("sheet");$("beat").scrollIntoView({behavior:"smooth",block:"start"})}
-$("slsend").onclick=slSend;
-$("slopen").onclick=()=>{SL.open=!SL.open;$("slicer").hidden=!SL.open;$("slopen").setAttribute("aria-expanded",SL.open);if(SL.open){slLoad();slUi();$("slicer").scrollIntoView({behavior:"smooth",block:"nearest"})}else slStop()};
-addEventListener("resize",()=>{if(SL.open)slDraw()});
 
 /* ---------- sessions (saved in this browser) and the pro export ---------- */
 let idbP=null;
