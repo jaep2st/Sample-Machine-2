@@ -56,10 +56,12 @@ header p{margin:4px 0 0;color:var(--mute)}
 .pad:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 .pad[aria-current=true]{border-color:var(--hot)}
 .pad.on{border-color:var(--go)}
-.ptop{display:flex;align-items:center;gap:6px}
+.ptop{display:flex;align-items:center;gap:6px}.ptop .tag{flex:1;min-width:0}
 .pn{font-weight:800;font-size:22px;line-height:1}
 .pt{font-size:13px;color:#b9b3a9;margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pad canvas{display:block;width:100%;height:36px;margin:8px 0 6px}
+.pad.top{grid-column:1/-1;border-color:var(--hot)}.pad.top canvas{height:64px}.pad.top .pn{font-size:1.4em}
+.pad .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .pbot{display:flex;justify-content:space-between;align-items:center}
 .ib{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;border:0;background:rgb(255 255 255/.1);color:var(--padink);cursor:pointer}
 .ib:focus-visible,.mini:focus-visible,.seg button:focus-visible,.btn:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
@@ -500,7 +502,36 @@ async function secondOpinion(){if(!USE_ESSENTIA){const o=$("finder").options[2];
   S.bES=r.ticks.filter(t=>t>=0&&t<S.dur);o.textContent="Essentia";o.disabled=false;
   const a=gridScore(S.bSM),b=gridScore(S.bES);if($("finder").value==="auto"&&b>a*1.02&&S.src==="sm"){applyBeats(S.bES,"ess");toast("Essentia found a tighter beat grid, switched to it")}
   status(`Beat fit: Sample Machine ${a.toFixed(2)} · Essentia ${b.toFixed(2)} (higher is tighter)`)}
-function rank(){const all=chopSet(S.bars),sc=[...all].sort((a,b)=>b.score-a.score);S.best=sc.slice(0,Math.max(6,Math.floor(sc.length/3)));const bi=new Set(S.best.map(c=>c.id));S.weird=sc.filter(c=>!bi.has(c.id)).slice(-8).reverse()}
+/* ---------- Best: what a producer would actually grab ----------
+   Per chop: loudness in four quarters (to spot fade-outs, fade-ins and near-silence), the harmony across the chop
+   (to spot chord changes and repeats of the same section), and how cleanly it loops. */
+function chopFeat(c){if(c.ft&&c.ft.y===S.y)return c.ft;const y=S.y,sr=S.sr,q=[],ch=[];
+  for(let k=0;k<4;k++){const a=Math.floor((c.start+(c.end-c.start)*k/4)*sr),b=Math.min(y.length,Math.floor((c.start+(c.end-c.start)*(k+1)/4)*sr));let s=0,n=0;for(let i=a;i<b;i+=8){s+=y[i]*y[i];n++}q.push(Math.sqrt(s/Math.max(1,n)))}
+  for(let k=0;k<4;k++)ch.push(chromaAt(c.start+(c.end-c.start)*(k+.5)/4));
+  const avg=new Float64Array(12);for(const x of ch)for(let k=0;k<12;k++)avg[k]+=x[k]/4;const cos=(a,b)=>{let d=0,x=0,z=0;for(let k=0;k<12;k++){d+=a[k]*b[k];x+=a[k]*a[k];z+=b[k]*b[k]}return d/Math.sqrt(x*z||1)};
+  let chg=0;for(let k=1;k<4;k++)chg=Math.max(chg,1-cos(ch[0],ch[k]));
+  return c.ft={y:S.y,q,level:(q[0]+q[1]+q[2]+q[3])/4,avg,chg,loop:loopSim(c.start,c.end),cos}}
+function rank(){const all=chopSet(S.bars);if(!all.length){S.best=[];S.weird=[];return}if(S.rk&&S.rk.all===all){S.best=S.rk.best;S.weird=S.rk.weird;return}
+  const F=all.map(chopFeat),lv=F.map(f=>f.level).sort((a,b)=>a-b),med=lv[lv.length>>1]||1e-9,
+    cg=F.map(f=>f.chg).sort((a,b)=>a-b),cg75=cg[Math.floor(cg.length*.75)]||1,lp=F.map(f=>f.loop).sort((a,b)=>a-b),lp70=lp[Math.floor(lp.length*.7)]||1,tail=new Set();
+  /* the outro: walk back from the end while each chop is quieter than the one before it */
+  if(F.length>2&&F[F.length-1].level<med*.7)for(let i=F.length-1;i>0&&F[i].level<F[i-1].level*.98;i--){tail.add(i);if(i===1||F[i-1].level>=med*.95&&F[i].level>=med*.9)break}
+  if(F.length>2&&F[F.length-1].level<med*.7)tail.add(F.length-1);brk=new Set(breaks().map(c=>c.id)),opn=new Set(opens().map(c=>c.id));
+  all.forEach((c,i)=>{const f=F[i],q=f.q,why=[];let s=c.score;
+    /* fades and near-silence: nobody samples the song dying out */
+    const slope=Math.min(q[3]/(q[0]+1e-9),q[0]/(q[3]+1e-9)),fade=q[3]<q[0]*.55&&q[3]<q[2]&&q[2]<q[1]*1.05,fin=q[0]<q[3]*.55&&q[0]<q[1];
+    if(f.level<med*.35)s*=.15;else if(f.level<med*.6)s*=.6;
+    if(tail.has(i))s*=.1;if(fade&&c.end>S.dur*.6)s*=.2;else if(fade)s*=.6;if(fin&&c.start<S.dur*.3)s*=.4;if(slope<.4)s*=.7;
+    if(f.loop>.93){s*=1.15;if(f.loop>=lp70)why.push("Loops clean")}
+    if(f.chg>.12&&f.chg<.45){s*=1.05;if(f.chg>=cg75)why.push("Chord change")}
+    if(brk.has(c.id))why.unshift("Drum break");else if(opn.has(c.id))why.unshift("No drums");
+    c.rs=s;c.why=why});
+  /* one of each part: a chorus that comes back four times shows up once, its cleanest take */
+  const sc=[...all].sort((a,b)=>b.rs-a.rs),pick=[],want=Math.max(6,Math.min(12,Math.floor(all.length/3)));
+  const same=(a,b)=>{const fa=chopFeat(a),fb=chopFeat(b);return fa.cos(fa.avg,fb.avg)>.985&&Math.abs(Math.log((fa.level+1e-9)/(fb.level+1e-9)))<.35};
+  for(const c of sc){if(pick.length>=want)break;if(c.rs<=(sc[0].rs||0)*.2)continue;if(pick.some(p=>same(p,c)))continue;pick.push(c)}
+  const floor=(sc[0]&&sc[0].rs||0)*.35;for(const c of sc){if(pick.length>=6)break;if(!pick.includes(c)&&c.rs>floor)pick.push(c)}if(!pick.length&&sc[0])pick.push(sc[0]);
+  const bi=new Set(pick.map(c=>c.id));S.best=pick;S.weird=sc.filter(c=>!bi.has(c.id)).slice(-8).reverse();S.rk={all,best:S.best,weird:S.weird}}
 function byId(id){if(id.startsWith("os_"))return S.shots.find(s=>s.id===id);const[b,n]=id.slice(1).split("_").map(Number);return chopSet(b)[n-1]}
 /* drum-break finder: drum-only sections are noisy across the spectrum (high flatness) and full of hits */
 function breakScores(cs){const N=2048,re=new Float64Array(N),im=new Float64Array(N),w=hann(N),y=S.y,sr=S.sr,lo=Math.ceil(100*N/sr),hi=Math.floor(10000*N/sr),pk=peaks();
@@ -656,7 +687,7 @@ const fmt=t=>`${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,"0")}`;
 function status(m){$("status").textContent=m}
 function refresh(){if(S.busy)return;rank();const its=tabItems(),pads=$("pads");
   if(!its.length){pads.innerHTML=`<div class="empty">${S.tab==="favs"?"No favorites yet. Tap the heart on a pad and it lands here.":S.tab==="breaks"?"No drum-only sections found in this track. Breaks are the parts where the drums play alone or almost alone, often in intros or bridges.":S.tab==="open"?"No open sections found. Open loops are melodic parts with few or no drums, like intros and breakdowns, the kind loop-first and drumless producers look for.":"Nothing here at this bar length. Try a shorter one."}</div>`}
-  else pads.innerHTML=its.map(it=>{const f=favs.has(fk(it.id));const tag=it.kind==="os"?"One-shot":it.shaky?"Check beat":S.tab==="favs"?it.id.slice(1).split("_")[0]+" bar":"";return`<div class="pad" role="button" tabindex="0" data-id="${esc(it.id)}" aria-current="${S.sel&&S.sel.id===it.id}"><div class="ptop"><span class="pn">${it.n}</span><span class="tag">${esc(tag)}</span><span class="pt">${fmt(it.start)}</span></div><canvas></canvas><div class="pbot"><button class="ib play" aria-label="Play loop">${ICON.play}</button><button class="ib heart" aria-pressed="${f}" aria-label="Favorite">${f?ICON.heartOn:ICON.heart}</button></div></div>`}).join("");
+  else pads.innerHTML=its.map(it=>{const f=favs.has(fk(it.id));const top=S.tab==="best"&&it===its[0],tag=it.kind==="os"?"One-shot":it.shaky?"Check beat":S.tab==="favs"?it.id.slice(1).split("_")[0]+" bar":S.tab==="best"&&it.why?(top?["Top pick",...it.why.slice(0,1)].join(" · "):it.why[0]||""):"";return`<div class="pad${top?" top":""}" role="button" tabindex="0" data-id="${esc(it.id)}" aria-current="${S.sel&&S.sel.id===it.id}"><div class="ptop"><span class="pn">${it.n}</span><span class="tag">${esc(tag)}</span><span class="pt">${fmt(it.start)}</span></div><canvas></canvas><div class="pbot"><button class="ib play" aria-label="Play loop">${ICON.play}</button><button class="ib heart" aria-pressed="${f}" aria-label="Favorite">${f?ICON.heartOn:ICON.heart}</button></div></div>`}).join("");
   for(const el of pads.querySelectorAll(".pad"))drawPad(el.querySelector("canvas"),byId(el.dataset.id));
   playUI();drawMap()}
 function toggleFav(id){const k=fk(id);favs.has(k)?favs.delete(k):favs.add(k);saveFavs();if(S.tab==="favs")refresh();else{const el=document.querySelector(`.pad[data-id="${CSS.escape(id)}"] .heart`);if(el){const f=favs.has(k);el.setAttribute("aria-pressed",f);el.innerHTML=f?ICON.heartOn:ICON.heart}}heartUI()}

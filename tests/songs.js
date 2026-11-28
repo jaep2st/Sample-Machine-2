@@ -36,6 +36,7 @@ function song(spec){
     if(spec.piano&&!inBreak&&(k%2===0)){const ch=chords[bar%chords.length],m=ch[(k/2)%ch.length]+12;both(at,x=>(Math.sin(2*Math.PI*midiHz(m)*x)+.4*Math.sin(4*Math.PI*midiHz(m)*x))*Math.exp(-x*6),.5,.25*(k%8===0?1.3:1))}
   }
   if(spec.crackle){for(let i=0;i<n;i++){const v=rnd();if(Math.abs(v)>.9996){L[i]+=v*.5;R[i]+=v*.5}L[i]+=rnd()*.004;R[i]+=rnd()*.004}}
+  if(spec.fadeOut){const f0=n-Math.floor(spec.fadeOut*sr);for(let i=Math.max(0,f0);i<n;i++){const g=(n-i)/(n-f0);L[i]*=g;R[i]*=g}}
   let pk=0;for(let i=0;i<n;i++)pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));const g=(spec.gain||0.95)/pk;for(let i=0;i<n;i++){L[i]*=g;R[i]*=g}
   return {sr,L,R,beats,downs,truthBpm:spec.truth||spec.tempo(dur/2)};
 }
