@@ -94,6 +94,42 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 .editor[hidden]{display:none}
 .packs{border-top:1px solid var(--line);padding-block:18px 40px}
 .packs h2{font-size:20px;margin:0 0 4px}
+.beat{border-top:1px solid var(--line);padding-block:20px 26px;background:var(--panel)}
+.bhead h2{font-size:clamp(28px,5vw,40px);font-weight:800;line-height:1.05;margin:0}
+.bhead p{margin:4px 0 12px;color:var(--mute);font-size:15px;max-width:70ch}
+.btrans{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:12px}
+.btrans .chip{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:0 8px;min-height:44px}
+#brec[aria-pressed=true]{background:var(--hot);color:#fff;border-color:var(--hot)}
+#bquant[aria-pressed=true],#bclick[aria-pressed=true]{background:var(--go);color:#0b1f16;border-color:var(--go)}
+.bwrap{display:grid;gap:14px;margin-bottom:12px}
+@media(min-width:760px){.bwrap{grid-template-columns:minmax(0,420px) minmax(0,1fr);align-items:start}}
+.bpads{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.bpad{position:relative;aspect-ratio:1;min-height:64px;border-radius:12px;border:2px solid transparent;background:var(--pad);color:var(--padink);cursor:pointer;text-align:left;padding:8px;display:flex;flex-direction:column;justify-content:space-between;touch-action:manipulation;user-select:none;-webkit-user-select:none;box-shadow:inset 0 -4px 0 rgb(0 0 0/.35)}
+.bpad .pn{font-weight:800;font-size:18px;line-height:1}
+.bpad .pl{font-size:12px;line-height:1.2;color:#cfc8bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bpad .pk{position:absolute;top:8px;right:8px;font-size:11px;color:#9b948a}
+.bpad.bempty{opacity:.5}
+.bpad[aria-current=true]{border-color:var(--ink)}
+.bpad.hit{filter:brightness(1.6)}
+.bpad:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
+.padset{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px}
+.padset h3{margin:0 0 6px;font-size:18px;font-weight:800}
+.padset .field{margin:6px 0}
+.padset .seg button{min-height:38px}
+.bgridwrap{border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.bgrid{position:relative;display:grid;gap:2px;padding:8px;min-width:max-content}
+.grow{display:flex;gap:2px;align-items:center}
+.glabel{flex:none;width:96px;min-height:30px;border:0;border-radius:6px;background:var(--pad);color:var(--padink);font-size:12px;font-weight:600;text-align:left;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.glabel[aria-current=true]{outline:2px solid var(--ink)}
+.gc{flex:none;width:26px;height:30px;border:0;border-radius:4px;background:color-mix(in srgb,var(--ink) 9%,transparent);cursor:pointer;padding:0}
+.gc.q{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.gc.bar{margin-left:6px}
+.gc[aria-pressed=true]{background:var(--hot)}
+.gc.dr[aria-pressed=true]{background:var(--go)}
+.gc.sb[aria-pressed=true]{background:#e0a020}
+.gc.off::after{content:"";display:block;width:4px;height:4px;border-radius:50%;background:#fff;margin:auto}
+.gph{position:absolute;top:4px;bottom:4px;width:26px;border-radius:5px;outline:2px solid var(--ink);pointer-events:none;opacity:0}
+.gempty{padding:14px;color:var(--mute);font-size:15px}
 .guide{border-top:1px solid var(--line);padding-block:22px 30px}
 .guide h2{font-size:clamp(24px,4vw,32px);font-weight:800;line-height:1.05;margin:0 0 6px}
 .gsub{margin:0 0 16px;color:var(--mute);font-size:15px;max-width:70ch}
@@ -164,7 +200,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     </div>
     <div id="kit" hidden style="margin:0 0 12px">
       <div id="kitpads" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px"></div>
-      <button class="btn" id="savekit" style="width:100%">Save stab kit (8 pitched pads)</button>
+      <div class="erow"><button class="btn" id="savekit">Save stab kit (8 pitched pads)</button><button class="btn" id="kitto">Send kit to pads</button></div>
     </div>
     <div class="field"><label>Style</label></div>
     <div class="styles" id="styles"></div>
@@ -178,8 +214,25 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <button class="btn red" id="save">Save chop</button>
     </div>
     <button class="btn chopOnly" id="saveloop" style="width:100%">Save ×4 loop</button>
+    <div class="erow" style="margin-top:8px"><button class="btn" id="topad">Send to pad</button><button class="btn" id="flipto" hidden>Send flip to pads</button></div>
   </aside>
 </main>
+<section class="band beat" id="beat">
+  <div class="bhead"><h2>Beat</h2><p>Send chops, flips and kits to the pads. Tap pads to play, tap the grid to program, or hit Rec and play it in.</p></div>
+  <div class="btrans">
+    <button class="btn main" id="bplay">Play</button><button class="btn" id="brec" aria-pressed="false">Rec</button>
+    <button class="btn" id="bquant" aria-pressed="true">Quantize</button><button class="btn" id="bclick" aria-pressed="false">Click</button>
+    <div class="seg" id="bbars" aria-label="Pattern length"><button data-b="1">1 bar</button><button data-b="2" aria-pressed="true">2</button><button data-b="4">4</button></div>
+    <span class="chip">BPM <button class="mini" id="bbdn" aria-label="Tempo down">−</button><b id="bbpm">90</b><button class="mini" id="bbup" aria-label="Tempo up">+</button></span>
+    <label class="chip" for="bswing">Swing <input type="range" id="bswing" min="50" max="75" step="1" value="50" style="width:110px"><output id="o_bswing">50%</output></label>
+    <button class="btn" id="bclear">Clear</button><button class="btn red" id="bbounce">Bounce beat</button>
+  </div>
+  <div class="bwrap">
+    <div class="bpads" id="bpads"></div>
+    <div class="padset" id="padset"></div>
+  </div>
+  <div class="bgridwrap scroll"><div class="bgrid" id="bgrid"></div></div>
+</section>
 <section class="band packs">
   <h2>Packs</h2>
   <p>Each pack is a .zip of 16-bit WAVs, built with every chop's current tweaks. Everything runs on your device: your tracks are never uploaded anywhere.</p>
@@ -511,6 +564,28 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   if(tapeSt)name+=`_tape${tapeSt>0?"+":""}${tapeSt}`;else if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");if(p.mode)name+="_"+p.mode.toLowerCase().replace(/[^a-z]+/g,"");
   const meta={bpm:chop?p.bpm:bb,root:KEYS.indexOf(key.split(" ")[0]),beats:chop?Math.max(1,Math.round(seg.length/sr*p.bpm/60)):0,one:!chop};const r={chs,seg,name,st,s,e,meta};if(S.cache.size>150)S.cache.clear();S.cache.set(k,r);return r}
 
+/* ---------- beat engine: pads, pattern timing, bounce, MIDI (pure, no audio device needed) ---------- */
+/* a pad holds a sound (chs at sr) and its settings; baking applies pitch and reverse so playback and bounce sound identical */
+function padBake(pad){let chs=pad.chs;if(pad.st)chs=chs.map(x=>resample(x,2**(pad.st/12)));if(pad.rev)chs=chs.map(x=>x.slice().reverse());return chs}
+/* attack ramp, then an optional decay to silence; dec 0 = let the sound play out */
+function padEnv(i,pad,sr){const a=Math.max(1,Math.round((pad.att||0)/1000*sr));let g=i<a?i/a:1;if(pad.dec){const d=Math.max(1,Math.round(pad.dec/1000*sr)),k=i-a;if(k>0)g*=Math.max(0,1-k/d)}return g}
+/* when a step plays: 16ths, MPC-style swing on the off 16ths (50% straight, 66% classic), the pad's own nudge, and any off-grid offset from live recording */
+function evTime(e,B){const st=60/B.bpm/4;let t=e.step*st;if(e.step%2===1)t+=((B.swing||50)-50)/50*st;const pd=B.pads[e.pad];if(pd&&pd.nudge)t+=pd.nudge/1000;return t+(e.off||0)}
+function patLen(B){return B.bars*16*(60/B.bpm/4)}
+/* bounce the pattern to audio, exactly one loop long; sounds that ring past the end wrap to the start so the loop is seamless */
+function bounceBeat(B,sr){const L=Math.round(patLen(B)*sr),out=[new Float32Array(L),new Float32Array(L)],baked=B.pads.map(p=>p&&p.chs?padBake(p):null),fo=Math.max(16,Math.floor(.004*sr));
+  const evs=B.events.filter(e=>baked[e.pad]).map(e=>({...e,t:evTime(e,B)})).sort((a,b)=>a.t-b.t);
+  evs.forEach((e,i)=>{const pd=B.pads[e.pad],src=baked[e.pad],start=Math.round(((e.t%patLen(B))+patLen(B))%patLen(B)*sr);let len=src[0].length;
+    if(pd.cut){for(let j=1;j<=evs.length;j++){const f=evs[(i+j)%evs.length],pf=B.pads[f.pad];if(pf&&pf.cut===pd.cut){let dt=f.t-e.t;if(dt<=0)dt+=patLen(B);len=Math.min(len,Math.round(dt*sr));break}}}
+    len=Math.min(len,L);const g=(pd.gain==null?1:pd.gain)*(e.vel||1);
+    for(let c=0;c<2;c++){const x=src[Math.min(c,src.length-1)],o=out[c];for(let k=0;k<len;k++){const fe=Math.min(1,(len-1-k)/fo);o[(start+k)%L]+=x[k]*padEnv(k,pd,sr)*g*fe}}});
+  let pk=0;for(const o of out)for(const v of o)pk=Math.max(pk,Math.abs(v));if(pk>.98){const k=.98/pk;for(const o of out)for(let i=0;i<L;i++)o[i]*=k}return out}
+/* standard MIDI file of the pattern: pad 1 = note 36 (C1), pad 16 = note 51, the usual MPC / drum-rack layout */
+function midiFile(B){const ppq=96,ev=[],vlq=n=>{const b=[n&127];while(n>>=7)b.unshift((n&127)|128);return b};
+  for(const e of B.events){if(!B.pads[e.pad])continue;const t=Math.max(0,Math.round(evTime(e,B)/(60/B.bpm)*ppq)),v=Math.max(1,Math.min(127,Math.round(100*(e.vel||1))));ev.push([t,1,0x90,36+e.pad,v],[t+ppq/4,0,0x80,36+e.pad,0])}
+  ev.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const us=Math.round(6e7/B.bpm),tr=[0,0xFF,0x51,3,(us>>16)&255,(us>>8)&255,us&255,0,0xFF,0x58,4,4,2,24,8];let last=0;
+  for(const [t,,st,n,v] of ev){tr.push(...vlq(t-last),st,n,v);last=t}const end=Math.round(B.bars*4*ppq);tr.push(...vlq(Math.max(0,end-last)),0xFF,0x2F,0);
+  const h=[0x4D,0x54,0x68,0x64,0,0,0,6,0,0,0,1,0,ppq],tl=tr.length;return new Uint8Array([...h,0x4D,0x54,0x72,0x6B,(tl>>>24)&255,(tl>>16)&255,(tl>>8)&255,tl&255,...tr])}
 /* ---------- playback ---------- */
 let ctx=null,cur=null,raf=0;
 function ac(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();if(ctx.state==="suspended")ctx.resume();return ctx}
@@ -561,7 +636,7 @@ function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;d
   for(const f of["shift","ts","te","pitch"])$(f).value=p[f];t.value=p.bpm;$("rev").setAttribute("aria-pressed",p.rev);$("rev").textContent="Reverse: "+(p.rev?"on":"off");
   for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);
   for(const b of $("modes").children)b.setAttribute("aria-pressed",!!p.mode&&MODES[b.dataset.m]&&MODES[b.dataset.m].name===p.mode);
-  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;
+  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);
   $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
 function closeEditor(){$("editor").hidden=true;document.body.classList.remove("sheet")}
 function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm;$("o_lpf").textContent=p.lp?(p.lp>=1000?(p.lp/1000).toFixed(1)+" kHz":p.lp+" Hz"):"off";$("o_hpf").textContent=p.hp?p.hp+" Hz":"off"}
@@ -674,6 +749,92 @@ $("zfav").onclick=()=>packs("fav");$("zall").onclick=()=>packs("all");$("zloop")
 $("file").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;e.target.value="";status("Decoding…");try{const buf=await ac().decodeAudioData(await f.arrayBuffer());const n=buf.length,y=new Float32Array(n);const C=Math.min(2,buf.numberOfChannels),chs=[];for(let c=0;c<C;c++){const d=new Float32Array(buf.getChannelData(c));chs.push(d);for(let i=0;i<n;i++)y[i]+=d[i]/C}await analyse(y,buf.sampleRate,f.name.replace(/\.[^.]+$/,""),chs)}catch(err){S.busy=false;status("Couldn't read that file. Try an mp3, wav or m4a.")}});
 document.addEventListener("dragover",e=>e.preventDefault());document.addEventListener("drop",e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){const dt=new DataTransfer();dt.items.add(f);$("file").files=dt.files;$("file").dispatchEvent(new Event("change"))}});
 const ro=new ResizeObserver(()=>{drawMap();for(const el of document.querySelectorAll(".pad"))drawPad(el.querySelector("canvas"),byId(el.dataset.id))});ro.observe($("mapbox"));
+
+/* ---------- beat: pads, sequencer, live recording ---------- */
+const BT={pads:Array(16).fill(null),events:[],bars:2,bpm:90,swing:50,sel:0,playing:false,rec:false,quant:true,click:false,t0:0};
+const KEYMAP="qwerasdfzxcvuiop",KIND={chop:"",stab:"sb",drum:"dr"};
+let padBuf=[],padAct={},allSrc=new Set();
+function padBuffer(i){const pd=BT.pads[i];if(!pd)return null;if(padBuf[i])return padBuf[i];const c=ac(),ch=padBake(pd),b=c.createBuffer(2,ch[0].length,pd.sr);for(let k=0;k<2;k++)b.copyToChannel(ch[Math.min(k,ch.length-1)],k);return padBuf[i]=b}
+function padPlay(i,when,vel=1){const pd=BT.pads[i];if(!pd)return;const c=ac(),src=c.createBufferSource(),g=c.createGain();src.buffer=padBuffer(i);src.connect(g);g.connect(c.destination);
+  const gain=(pd.gain==null?1:pd.gain)*vel,a=Math.max(.0015,(pd.att||0)/1000);g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(gain,when+a);if(pd.dec)g.gain.linearRampToValueAtTime(0,when+a+pd.dec/1000);
+  /* cut groups: a new hit in the group silences the last one, like an MPC mute group */
+  if(pd.cut){const pv=padAct[pd.cut];if(pv){try{pv.g.gain.cancelScheduledValues(when);pv.g.gain.setTargetAtTime(0,when,.0015);pv.src.stop(when+.02)}catch(e){}}padAct[pd.cut]={src,g}}
+  allSrc.add(src);src.onended=()=>allSrc.delete(src);src.start(when);setTimeout(()=>flashPad(i),Math.max(0,(when-c.currentTime)*1000))}
+function flashPad(i){const el=document.querySelector(`.bpad[data-i="${i}"]`);if(!el)return;el.classList.add("hit");setTimeout(()=>el.classList.remove("hit"),90)}
+/* lookahead scheduler: places pad hits on the audio clock a little ahead of time, so timing stays tight */
+let seqT=null,seqList=[],seqPtr=0,seqLoop=0,seqDirty=false,clkN=0,phRaf=0;
+function seqSorted(){seqList=BT.events.filter(e=>BT.pads[e.pad]).map(e=>({e,t:evTime(e,BT)})).sort((a,b)=>a.t-b.t)}
+function seqResync(){seqSorted();const c=ac(),pl=patLen(BT),pos=c.currentTime-BT.t0;seqLoop=Math.floor(pos/pl);const inL=pos-seqLoop*pl;seqPtr=seqList.findIndex(x=>x.t>inL);if(seqPtr<0){seqPtr=0;seqLoop++}}
+function seqTick(){const c=ac(),pl=patLen(BT),ahead=c.currentTime+.12;if(seqDirty){seqDirty=false;seqResync()}
+  if(BT.click){if(!cbuf)cbuf=[clickBuf(c,1500),clickBuf(c,2600)];const bd=60/BT.bpm;while(true){const t=BT.t0+clkN*bd;if(t>ahead)break;if(t>=c.currentTime-.01){const s=c.createBufferSource();s.buffer=cbuf[clkN%4===0?1:0];s.connect(c.destination);s.start(t)}clkN++}}
+  let guard=0;while(seqList.length&&guard++<512){const x=seqList[seqPtr],t=BT.t0+seqLoop*pl+x.t;if(t>ahead)break;if(t>=c.currentTime-.02)padPlay(x.e.pad,Math.max(t,c.currentTime),x.e.vel||1);if(++seqPtr>=seqList.length){seqPtr=0;seqLoop++}}}
+function seqPlay(){stopPlay();const c=ac();BT.t0=c.currentTime+.08;seqLoop=0;seqPtr=0;clkN=0;seqSorted();while(seqPtr<seqList.length&&seqList[seqPtr].t<0)seqPtr++;
+  BT.playing=true;seqT=setInterval(seqTick,25);seqTick();$("bplay").textContent="Stop";cancelAnimationFrame(phRaf);phRaf=requestAnimationFrame(playhead)}
+function seqStop(){clearInterval(seqT);seqT=null;BT.playing=false;for(const s of allSrc)try{s.stop()}catch(e){}allSrc.clear();padAct={};$("bplay").textContent="Play";const ph=document.querySelector(".gph");if(ph)ph.style.opacity=0}
+function playhead(){if(!BT.playing)return;const c=ac(),pl=patLen(BT),pos=c.currentTime-BT.t0,ph=document.querySelector(".gph");
+  if(ph&&pos>=0){const st=Math.floor((pos%pl)/(60/BT.bpm/4)),cell=document.querySelector(`.gc[data-step="${st}"]`);if(cell){ph.style.left=cell.offsetLeft+"px";ph.style.opacity=1}}phRaf=requestAnimationFrame(playhead)}
+/* live recording: a pad hit lands on the nearest step; with Quantize off it keeps exactly where you played it */
+function recHit(i){const c=ac(),pl=patLen(BT),pos=(((c.currentTime-BT.t0)%pl)+pl)%pl;let best=0,bd=1e9;
+  for(let s=0;s<BT.bars*16;s++){let d=pos-evTime({step:s,pad:i},BT);if(d>pl/2)d-=pl;if(d<-pl/2)d+=pl;if(Math.abs(d)<Math.abs(bd)){bd=d;best=s}}
+  BT.events=BT.events.filter(e=>!(e.pad===i&&e.step===best));BT.events.push({pad:i,step:best,off:BT.quant?0:bd,vel:1});seqDirty=true;renderGrid()}
+function hitPad(i){if(!BT.pads[i]){BT.sel=i;renderBeat();return}const c=ac();padPlay(i,c.currentTime);if(BT.playing&&BT.rec)recHit(i);if(BT.sel!==i){BT.sel=i;renderPadset();markSel()}}
+/* ---- sending sounds to pads ---- */
+function newPad(chs,name,kind,sr){return{name,chs,sr:sr||S.sr,kind:kind||"chop",gain:1,st:0,rev:false,att:0,dec:0,cut:0,nudge:0}}
+function setPad(i,pd){if(!BT.pads.some(Boolean)&&!BT.events.length)setBbpm(S.tb||BT.bpm);BT.pads[i]=pd;padBuf[i]=null;seqDirty=true}
+function freePad(){if(!BT.pads[BT.sel])return BT.sel;const f=BT.pads.findIndex(x=>!x);return f<0?BT.sel:f}
+function sendToPad(){const it=S.sel;if(!it)return;const r=render(it),i=freePad();setPad(i,newPad(r.chs.map(x=>x.slice()),`${it.kind==="os"?"Shot":"Chop"} ${it.n}${P(it.id).mode?" "+P(it.id).mode.split(" ")[0]:""}`,"chop"));BT.sel=i;renderBeat();toast(`Sent to pad ${i+1}`)}
+function sendKit(){if(!kit)return;const drums=!!kit[0].file,base=drums?8:0;kit.slice(0,8).forEach((k,j)=>setPad(base+j,{...newPad(k.chs.map(x=>x.slice()),drums?k.note:`Stab ${k.note}${k.st===12?"↑":""}`,drums?"drum":"stab"),cut:drums?0:2}));BT.sel=base;renderBeat();
+  toast(drums?"Drum kit sent to pads 9–16":"Stab kit sent to pads 1–8");$("beat").scrollIntoView({behavior:"smooth",block:"start"})}
+/* a Micro-Chop / Off-Grid flip becomes pads plus an editable pattern that plays back exactly like the flip */
+function sendFlip(){const it=S.sel,p=P(it.id);if(!p.flip||!p.flip.events)return;const q={...p,flip:null},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
+  const L=r.seg.length,sr=S.sr,bars=Math.min(4,it.bars),loopSec=L/sr,keys=[],map={};
+  for(const ev of p.flip.events){if(ev.at*it.bars>=bars)continue;const k=ev.src.toFixed(6)+"|"+(ev.st||0);if(!(k in map)){if(keys.length>=8)continue;map[k]=keys.length;keys.push({src:ev.src,st:ev.st||0,len:0})}keys[map[k]].len=Math.max(keys[map[k]].len,ev.len)}
+  keys.forEach((k,j)=>{const a=Math.round(k.src*L),n=Math.min(Math.round(Math.min(k.len,.6)*L),Math.round(2.5*sr)),chs=r.chs.map(x=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=x[(a+i)%L];return o});
+    setPad(j,{...newPad(chs,`Flip ${j+1}`,"chop"),st:k.st,cut:1})});
+  setBbpm(p.bpm);BT.bars=bars;BT.swing=p.flip.swing?Math.round(50+p.flip.swing*50):50;BT.events=BT.events.filter(e=>e.pad>=keys.length);
+  for(const ev of p.flip.events){if(ev.at*it.bars>=bars)continue;const k=ev.src.toFixed(6)+"|"+(ev.st||0);if(!(k in map))continue;const pad=map[k],t=ev.at*loopSec;let best=0,bd=1e9;
+    for(let s=0;s<bars*16;s++){const d=t-evTime({step:s,pad},BT);if(Math.abs(d)<Math.abs(bd)){bd=d;best=s}}BT.events.push({pad,step:best,off:Math.abs(bd)<1e-4?0:bd,vel:ev.g||1})}
+  BT.sel=0;renderBeat();toast(`Flip sent to pads 1–${keys.length}: edit it in the grid`);$("beat").scrollIntoView({behavior:"smooth",block:"start"})}
+/* ---- rendering the beat section ---- */
+function setBbpm(v){BT.bpm=Math.max(40,Math.min(220,Math.round(v)));$("bbpm").textContent=BT.bpm;seqDirty=true}
+function markSel(){for(const el of document.querySelectorAll(".bpad"))el.setAttribute("aria-current",+el.dataset.i===BT.sel);for(const el of document.querySelectorAll(".glabel"))el.setAttribute("aria-current",+el.dataset.pad===BT.sel)}
+function renderPads(){const desk=matchMedia("(hover:hover)").matches;$("bpads").innerHTML=BT.pads.map((pd,i)=>`<button class="bpad${pd?"":" bempty"}" data-i="${i}" aria-label="Pad ${i+1}${pd?": "+esc(pd.name):" (empty)"}" style="${pd?`border-left:5px solid ${pd.kind==="drum"?"var(--go)":pd.kind==="stab"?"#e0a020":"var(--hot)"}`:""}"><span class="pn">${i+1}</span>${desk?`<span class="pk">${KEYMAP[i].toUpperCase()}</span>`:""}<span class="pl">${pd?esc(pd.name):"empty"}</span></button>`).join("");markSel()}
+function renderPadset(){const i=BT.sel,pd=BT.pads[i],el=$("padset");
+  if(!pd){el.innerHTML=`<h3>Pad ${i+1}</h3><p style="margin:0;color:var(--mute);font-size:15px">Empty. Open a chop and tap <b>Send to pad</b>, or send a flip or kit from the chop editor.</p>`;return}
+  const row=(id,lab,min,max,step,val,unit)=>`<div class="field"><label for="${id}">${lab} <output id="o_${id}">${val}${unit}</output></label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></div>`;
+  el.innerHTML=`<h3>Pad ${i+1}: ${esc(pd.name)}</h3>${row("pgain","Level",0,150,1,Math.round(pd.gain*100),"%")}${row("pst","Pitch",-12,12,1,pd.st," st")}${row("patt","Attack",0,200,1,pd.att," ms")}${row("pdec","Decay (0 = full length)",0,2000,10,pd.dec," ms")}${row("pnud","Nudge (− early, + late)",-40,40,1,pd.nudge," ms")}
+    <div class="field"><label>Cut group</label></div><div class="seg" id="pcut"><button data-c="0" aria-pressed="${!pd.cut}">Off</button><button data-c="1" aria-pressed="${pd.cut===1}">A</button><button data-c="2" aria-pressed="${pd.cut===2}">B</button></div>
+    <div class="erow" style="margin-top:10px"><button class="btn" id="prev" aria-pressed="${!!pd.rev}">Reverse: ${pd.rev?"on":"off"}</button><button class="btn" id="pclr">Clear pad</button></div>`;
+  const upd=(k,v,o,u)=>{pd[k]=v;$("o_"+o).textContent=(k==="gain"?Math.round(v*100):v)+u;padBuf[i]=null;seqDirty=true};
+  $("pgain").oninput=e=>upd("gain",e.target.value/100,"pgain","%");$("pst").oninput=e=>upd("st",+e.target.value,"pst"," st");$("patt").oninput=e=>upd("att",+e.target.value,"patt"," ms");
+  $("pdec").oninput=e=>upd("dec",+e.target.value,"pdec"," ms");$("pnud").oninput=e=>upd("nudge",+e.target.value,"pnud"," ms");
+  $("pcut").onclick=e=>{const b=e.target.closest("button");if(!b)return;pd.cut=+b.dataset.c;renderPadset()};$("prev").onclick=()=>{pd.rev=!pd.rev;padBuf[i]=null;renderPadset()};
+  $("pclr").onclick=()=>{BT.pads[i]=null;padBuf[i]=null;BT.events=BT.events.filter(e=>e.pad!==i);seqDirty=true;renderBeat()}}
+function renderGrid(){const rows=BT.pads.map((pd,i)=>pd||i===BT.sel?i:-1).filter(i=>i>=0),N=BT.bars*16,on=new Map(BT.events.map(e=>[e.pad+"_"+e.step,e]));
+  if(!BT.pads.some(Boolean)){$("bgrid").innerHTML=`<div class="gempty">The grid fills in once a pad has a sound.</div>`;return}
+  $("bgrid").innerHTML=`<div class="gph"></div>`+rows.map(i=>{const pd=BT.pads[i],cls=pd?KIND[pd.kind]||"":"";let cells="";for(let st=0;st<N;st++){const e=on.get(i+"_"+st);cells+=`<button class="gc${st%4===0?" q":""}${st%16===0&&st?" bar":""} ${cls}${e&&e.off?" off":""}" data-pad="${i}" data-step="${st}" aria-pressed="${!!e}" aria-label="Pad ${i+1} step ${st+1}"></button>`}
+    return`<div class="grow"><button class="glabel" data-pad="${i}" aria-current="${i===BT.sel}">${i+1} ${pd?esc(pd.name):"(empty)"}</button>${cells}</div>`}).join("")}
+function renderBeat(){renderPads();renderPadset();renderGrid();$("bbpm").textContent=BT.bpm;$("bswing").value=BT.swing;$("o_bswing").textContent=BT.swing+"%";
+  for(const b of $("bbars").children)b.setAttribute("aria-pressed",+b.dataset.b===BT.bars)}
+/* ---- wiring ---- */
+$("bpads").addEventListener("pointerdown",e=>{const b=e.target.closest(".bpad");if(!b)return;e.preventDefault();hitPad(+b.dataset.i)});
+$("bpads").addEventListener("keydown",e=>{const b=e.target.closest(".bpad");if(b&&(e.key==="Enter"||e.key===" ")){e.preventDefault();hitPad(+b.dataset.i)}});
+document.addEventListener("keydown",e=>{if(e.repeat||e.metaKey||e.ctrlKey||e.altKey||(e.target.closest&&e.target.closest("input,select,textarea")))return;const i=KEYMAP.indexOf(e.key.toLowerCase());if(i>=0&&BT.pads.some(Boolean)){hitPad(i)}});
+$("bgrid").addEventListener("click",e=>{const g=e.target.closest(".gc");if(g){const pad=+g.dataset.pad,step=+g.dataset.step,ex=BT.events.findIndex(x=>x.pad===pad&&x.step===step);if(!BT.pads[pad])return;
+    if(ex>=0)BT.events.splice(ex,1);else{BT.events.push({pad,step,off:0,vel:1});if(!BT.playing)padPlay(pad,ac().currentTime)}seqDirty=true;g.setAttribute("aria-pressed",ex<0);g.classList.remove("off");return}
+  const l=e.target.closest(".glabel");if(l){BT.sel=+l.dataset.pad;renderPadset();markSel()}});
+$("bplay").onclick=()=>BT.playing?seqStop():seqPlay();
+$("brec").onclick=()=>{BT.rec=!BT.rec;$("brec").setAttribute("aria-pressed",BT.rec);if(BT.rec&&!BT.playing)seqPlay()};
+$("bquant").onclick=()=>{BT.quant=!BT.quant;$("bquant").setAttribute("aria-pressed",BT.quant)};
+$("bclick").onclick=()=>{BT.click=!BT.click;$("bclick").setAttribute("aria-pressed",BT.click);if(BT.playing){const c=ac();clkN=Math.ceil((c.currentTime-BT.t0)/(60/BT.bpm))}};
+$("bbars").onclick=e=>{const b=e.target.closest("button");if(!b)return;BT.bars=+b.dataset.b;BT.events=BT.events.filter(x=>x.step<BT.bars*16);seqDirty=true;renderBeat()};
+$("bbdn").onclick=()=>setBbpm(BT.bpm-1);$("bbup").onclick=()=>setBbpm(BT.bpm+1);
+$("bswing").oninput=e=>{BT.swing=+e.target.value;$("o_bswing").textContent=BT.swing+"%";seqDirty=true};
+$("bclear").onclick=()=>{BT.events=[];seqDirty=true;renderGrid()};
+$("bbounce").onclick=()=>{if(!BT.events.length){toast("Program or record a pattern first");return}const sr=(BT.pads.find(Boolean)||{}).sr||S.sr,out=bounceBeat(BT,sr),nm=S.name.replace(/[^\w-]+/g,"_");
+  saveZip(`${nm}_beat_${BT.bpm}bpm.zip`,[{name:`${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(out,sr,{bpm:BT.bpm,beats:BT.bars*4,root:Math.max(0,KEYS.indexOf((S.key||"C").split(" ")[0])),one:false})}])};
+$("topad").onclick=sendToPad;$("flipto").onclick=sendFlip;$("kitto").onclick=sendKit;
+renderBeat();
 
 /* ---------- demo beat so the machine opens mid-use ---------- */
 function demo(){const sr=44100,bpm=92,beat=60/bpm,bars=16,n=Math.floor(bars*4*beat*sr),y=new Float32Array(n);let seed=7;const rnd=()=>(seed=seed*16807%2147483647)/2147483647*2-1;

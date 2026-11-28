@@ -90,6 +90,29 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
   S.env = await A.onsetEnv(S.y, S.sr); A.setBpm(A.tempo(S.env, S.sr / 512), true); S.bars = 2;
   const op = A.opens();
   check(op.length > 0 && op[0].end <= 21.5, `Open finder: top open loop ${op[0] ? op[0].start.toFixed(1) + "-" + op[0].end.toFixed(1) + " s" : "none"} (drums start at 21 s)`);
+  // ---- beat engine (pads + sequencer) ----
+  if (A.bounceBeat) {
+    const click = n => [Float32Array.from({ length: n }, (_, i) => i < 8 ? 1 : 0)];
+    const tail = n => [Float32Array.from({ length: n }, () => .2)];
+    const B = { bpm: 90, bars: 2, swing: 50, pads: Array(16).fill(null), events: [] };
+    B.pads[0] = { chs: click(2000), sr, gain: 1, st: 0, att: 0, dec: 0, cut: 0, nudge: 0 };
+    B.events = [0, 4, 8, 12, 16, 20, 24, 28].map(step => ({ pad: 0, step, off: 0, vel: 1 }));
+    let out = A.bounceBeat(B, sr); const L = Math.round(A.patLen(B) * sr);
+    check(out[0].length === L && Math.abs(L - 2 * 4 * 60 / 90 * sr) < 1, `Beat bounce: 2 bars at 90 BPM is exactly ${L} samples`);
+    const hits = []; for (let i = 1; i < L; i++) if (out[0][i] > .5 && out[0][i - 1] < .5) hits.push(i); if (out[0][0] > .5) hits.unshift(0);
+    const q = 60 / 90 * sr; check(hits.length === 8 && hits.every((h, k) => Math.abs(h - Math.round(k * q)) <= 1), `Beat bounce: quarter-note hits land on the sample (${hits.length} hits)`);
+    B.swing = 66; const st = 60 / 90 / 4, sw = A.evTime({ pad: 0, step: 1 }, B) - st;
+    check(Math.abs(sw - .32 * st) < 1e-9 && A.evTime({ pad: 0, step: 2 }, B) === 2 * st, `Swing 66%: odd 16ths push late by ${(sw * 1000).toFixed(1)} ms, even ones stay put`);
+    B.swing = 50; B.pads[0] = { chs: tail(sr), sr, gain: 1, st: 0, att: 0, dec: 0, cut: 1, nudge: 0 }; B.pads[1] = { chs: tail(sr), sr, gain: 1, st: 0, att: 0, dec: 0, cut: 1, nudge: 0 };
+    B.events = [{ pad: 0, step: 0, off: 0 }, { pad: 1, step: 2, off: 0 }]; out = A.bounceBeat(B, sr);
+    const mid = Math.round(3 * st * sr); check(Math.abs(out[0][mid] - .2) < .02, `Cut group: pad 2 chokes pad 1 instead of stacking (level ${out[0][mid].toFixed(2)})`);
+    B.pads[1].cut = 0; out = A.bounceBeat(B, sr); check(out[0][mid] > .35, "No cut group: both sounds ring together");
+    B.pads[0].nudge = 10; B.pads[0].cut = 0; B.events = [{ pad: 0, step: 4, off: 0 }]; B.pads[0].chs = click(2000);
+    out = A.bounceBeat(B, sr); let h0 = out[0].findIndex(v => v > .5); check(Math.abs(h0 - Math.round((4 * st + .01) * sr)) <= 1, "Pad nudge +10 ms plays 10 ms late");
+    const m = A.midiFile({ ...B, events: [{ pad: 0, step: 0 }, { pad: 1, step: 4 }] }), str = String.fromCharCode(...m.slice(0, 4));
+    const notes = []; for (let i = 0; i < m.length - 2; i++) if (m[i] === 0x90) notes.push(m[i + 1]);
+    check(str === "MThd" && m[13] === 96 && notes.join() === "36,37", `MIDI export: valid file, pads map to notes ${notes.join(", ")}`);
+  }
   console.log(fails ? `\n${fails} check(s) FAILED` : "\nAll flip checks passed");
   process.exit(fails ? 1 : 0);
 })();
