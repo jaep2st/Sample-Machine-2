@@ -38,12 +38,29 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     check(L === want(p.bpm) && finite(r.chs) && peak(r.chs) <= 1, `${A.MODES[m].name}: exact length at ${p.bpm} BPM, no bad samples, no clipping`);
     if (m === "soul") check(p.tape && p.bpm > 90 && Math.abs(L / plain.seg.length - 90 / p.bpm) < 1e-3 && /Tape speed \+/.test(r.st.join(" ")), `Soul Speed-Up: tape-style speed-up to ${p.bpm} BPM, pitch rises with it (${r.st.find(x => /Tape/.test(x))})`);
     if (m === "micro" || m === "offgrid") {
-      const ev = p.flip.events, rms = y => Math.sqrt(y.reduce((a, v) => a + v * v, 0) / y.length);
-      const srcs = new Set(ev.map(e => e.src)), ons = new Set(A.onsetsIn(plain.seg, sr).map(o => o / plain.seg.length));
-      check(ev[0].at === 0 && ev[0].src === 0, `${A.MODES[m].name}: opens on the original downbeat`);
-      check([...srcs].every(v => ons.has(v)), `${A.MODES[m].name}: every chop starts where a note starts (${srcs.size} different chops used)`);
-      check(srcs.size >= 3 && ev.length >= it.bars * 4 && corr(r.seg, plain.seg) < .9, `${A.MODES[m].name}: a real re-arrangement (${ev.length} hits over ${it.bars} bars, similarity to original ${corr(r.seg, plain.seg).toFixed(2)})`);
-      check(rms(r.seg) > rms(plain.seg) * .5, `${A.MODES[m].name}: full-sounding, not gappy (level ${(rms(r.seg) / rms(plain.seg) * 100).toFixed(0)}% of the original)`) }
+      // flips are random every press, so check 25 presses: every single one has to hold up
+      const rms = y => Math.sqrt(y.reduce((a, v) => a + v * v, 0) / y.length), ons = A.onsetsIn(plain.seg, sr).map(o => o / plain.seg.length), L = plain.seg.length, s16 = L / it.bars / 16;
+      let minHits = 1e9, minSrc = 1e9, maxCorr = 0, minLvl = 9, smear = 0, firstOk = 0, onOk = 0, order = 1, late = 1e9;
+      for (let k = 0; k < 25; k++) {
+        S.params[it.id] = A.base(); const q = A.P(it.id); A.MODES[m].go(q, it); q.mode = A.MODES[m].name; S.cache.clear(); const rr = A.render(it), ev = q.flip.events;
+        minHits = Math.min(minHits, ev.length); minSrc = Math.min(minSrc, new Set(ev.map(e => e.src.toFixed(5))).size);
+        maxCorr = Math.max(maxCorr, corr(rr.seg, plain.seg)); minLvl = Math.min(minLvl, rms(rr.seg) / rms(plain.seg));
+        if (ev[0].at === 0) firstOk++;
+        if (ev.every(e => ons.some(o => Math.abs(o - e.src) < 2 / L) || m === "offgrid")) onOk++;
+        if (m === "offgrid") { let inOrd = 0; for (let i = 1; i < ev.length; i++) if (ev[i].src >= ev[i - 1].src - 1e-9) inOrd++; order = Math.min(order, inOrd / (ev.length - 1));
+          const off = ev.map(e => { const t = e.at * L / s16; return Math.abs(t - Math.round(t)) * s16 / sr * 1000 }); late = Math.min(late, off.reduce((a, v) => a + v, 0) / off.length) }
+      }
+      check(firstOk === 25, `${A.MODES[m].name}: every flip opens on beat 1`);
+      if (m === "micro") {
+        check(onOk === 25, `${A.MODES[m].name}: every chop starts where a note starts`);
+        check(minHits >= it.bars * 5 && minSrc >= 3, `${A.MODES[m].name}: never thin, at least ${minHits} hits over ${it.bars} bars and ${minSrc} different chops, in all 25 presses`);
+        check(maxCorr < .9, `${A.MODES[m].name}: always a real re-arrangement (most similar to the original: ${maxCorr.toFixed(2)})`);
+      } else {
+        check(order >= .75, `${A.MODES[m].name}: keeps the sample's own order so it stays recognizable (${(order * 100).toFixed(0)}% in order, worst press)`);
+        check(late >= 4, `${A.MODES[m].name}: chops really sit off the grid (average ${late.toFixed(1)} ms off straight time, least drunk press)`);
+        check(minHits >= it.bars * 4, `${A.MODES[m].name}: at least ${minHits} chops over ${it.bars} bars in every press`);
+      }
+      check(minLvl > .5, `${A.MODES[m].name}: full-sounding, not gappy (quietest press ${(minLvl * 100).toFixed(0)}% of the original level)`) }
     if (m === "offgrid") check(p.flip.swing > 0, "Off-Grid Flip: MPC-style swing applied");
     if (m === "bass") check(hf(r.seg) < hf(plain.seg) * .05, `Filtered Bass: highs removed (${(hf(r.seg) / hf(plain.seg) * 100).toFixed(1)}% left)`);
     if (m === "dusty") check(hf(r.seg) < hf(plain.seg), "Dusty Loop: top end softened");
