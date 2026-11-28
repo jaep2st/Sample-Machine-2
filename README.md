@@ -1,6 +1,6 @@
-# Sample Machine 2
+# Producer Face
 
-Chop any track into beat-snapped loops and one-shots, right in your browser.
+Find the chop that gets the face. Chop any track into beat-snapped loops, chops and flips, right in your browser.
 
 **Live:** https://jaep2st.github.io/Sample-Machine-2/
 

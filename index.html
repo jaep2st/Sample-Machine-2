@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sample Machine 2</title>
+<title>Producer Face</title>
 <meta name="description" content="Drop a track, get beat-snapped chops, seamless loops and one-shots. Runs in your browser.">
 <meta name="theme-color" content="#e2412b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Sample Machine 2">
+<meta name="apple-mobile-web-app-title" content="Producer Face">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%23e2412b%27/%3E%3Crect x=%2714%27 y=%2714%27 width=%2715%27 height=%2715%27 rx=%273%27 fill=%27%23fff%27/%3E%3Crect x=%2735%27 y=%2714%27 width=%2715%27 height=%2715%27 rx=%273%27 fill=%27%23fff%27/%3E%3Crect x=%2714%27 y=%2735%27 width=%2715%27 height=%2715%27 rx=%273%27 fill=%27%23fff%27/%3E%3Crect x=%2735%27 y=%2735%27 width=%2715%27 height=%2715%27 rx=%273%27 fill=%27%23171614%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
@@ -171,7 +171,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 </head>
 <body>
 <header class="band">
-  <div><h1>Sample Machine 2</h1><p>Drop a track. Get beat-snapped chops, loops and one-shots.</p></div>
+  <div><h1>Producer Face</h1><p>Find the chop that gets the face. Drop a track, get beat-snapped loops, chops and flips.</p></div>
   <div class="hbtns"><button class="probtn" id="probtn">Go Pro</button><label class="load" id="loadlbl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>Load a track<input id="file" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac,.aac,.ogg"></label></div>
 </header>
 <section class="band onboard" id="onboard" hidden>
@@ -184,7 +184,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 <div class="prosheet" id="prosheet" hidden role="dialog" aria-modal="true" aria-labelledby="protitle">
   <div class="probox">
     <button class="ib proclose" id="proclose" aria-label="Close">✕</button>
-    <h2 id="protitle">Sample Machine Pro</h2>
+    <h2 id="protitle">Producer Face Pro</h2>
     <p class="prowhy" id="prowhy"></p>
     <ul class="prolist">
       <li><b>Unlimited saves</b> of chops, loops, kits and packs (free: <span class="freen">5</span> a day)</li>
@@ -216,7 +216,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
   </div>
   <div class="readout" style="margin-top:-2px">
     <label class="chip" for="finder">Beat finder
-      <select id="finder" class="mini" style="padding:0 8px;font-weight:600"><option value="auto">Auto</option><option value="sm">Sample Machine</option></select></label>
+      <select id="finder" class="mini" style="padding:0 8px;font-weight:600"><option value="auto">Auto</option><option value="sm">Producer Face</option></select></label>
     <button class="mini" id="setone" aria-pressed="false" style="padding:0 12px">Set beat 1</button>
     <span class="chip" id="grid" style="color:var(--mute);font-size:14px"></span>
   </div>
@@ -324,7 +324,7 @@ const CFG={
   portal:"https://polar.sh/",   // where customers manage or cancel (your Polar customer portal link)
   price:"$5 a month or $40 a year",
   fine:"Cancel any time. Not happy? Email us within 7 days for a full refund.",
-  support:"",             // your support email, e.g. help@yourdomain.com
+  support:"producerface.help@gmail.com",             // your support email, e.g. help@yourdomain.com
   freeSaves:5             // free saves per day
 };
 const KEYS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -506,7 +506,7 @@ async function analyse(y,sr,name,chs){S.busy=true;stopPlay();const cut=c=>c.leng
 /* how well a beat grid sits on the music: onset strength on the beats vs halfway between them */
 function gridScore(beats){if(!beats||beats.length<8)return 0;const env=S.env,at=t=>{const f=Math.round((t*S.sr-FR/2)/HOP);return Math.max(env[f-1]||0,env[f]||0,env[f+1]||0)};let on=0,off=0;
   for(let i=1;i<beats.length;i++){on+=at(beats[i]);off+=at((beats[i]+beats[i-1])/2)}return on/Math.max(1e-9,off)}
-const NAMES={sm:"Sample Machine",ess:"Essentia",tap:"your tapped tempo",edit:"your edit"};
+const NAMES={sm:"Producer Face",ess:"Essentia",tap:"your tapped tempo",edit:"your edit"};
 function applyBeats(beats,src,fresh,db){S.beats=beats;S.src=src;const d=[];for(let i=1;i<beats.length;i++)d.push(beats[i]-beats[i-1]);d.sort((x,y)=>x-y);
   S.bpm=d.length?60/d[d.length>>1]:120;S.tb=Math.round(S.bpm);S.gs=gridScore(beats);S.barT=downbeats(beats,db);S.sets={};S.params={};S.cache.clear();$("bpm").textContent=S.tb;
   $("grid").textContent="Grid from "+NAMES[src];if(!fresh){S.sel=null;closeEditor();stopPlay();refresh()}}
@@ -565,7 +565,7 @@ async function secondOpinion(){if(!USE_ESSENTIA){const o=$("finder").options[2];
   if(!r){o.textContent="Essentia (unavailable)";o.disabled=true;if($("finder").value==="auto")status("");return}
   S.bES=r.ticks.filter(t=>t>=0&&t<S.dur);o.textContent="Essentia";o.disabled=false;
   const a=gridScore(S.bSM),b=gridScore(S.bES);if($("finder").value==="auto"&&b>a*1.02&&S.src==="sm"){applyBeats(S.bES,"ess");toast("Essentia found a tighter beat grid, switched to it")}
-  status(`Beat fit: Sample Machine ${a.toFixed(2)} · Essentia ${b.toFixed(2)} (higher is tighter)`)}
+  status(`Beat fit: Producer Face ${a.toFixed(2)} · Essentia ${b.toFixed(2)} (higher is tighter)`)}
 /* ---------- Best: what a producer would actually grab ----------
    Per chop: loudness in four quarters (to spot fade-outs, fade-ins and near-silence), the harmony across the chop
    (to spot chord changes and repeats of the same section), and how cleanly it loops. */
@@ -1044,7 +1044,7 @@ function exportFiles(){const nm=(S.name||"beat").replace(/[^\w-]+/g,"_").slice(0
   BT.pads.forEach((pd,i)=>{if(!pd)return;const n=String(i+1).padStart(2,"0"),bank=`${"ABCD"[i>>2]}${(i&3)+1}`,safe=pd.name.replace(/[^\w-]+/g,"_");
     files.push({name:`${nm}_kit/Pad${n}_${safe}.wav`,data:wav(padRender(pd),pd.sr)});lines.push(`Pad ${n} (MPC ${["A01","A02","A03","A04","A05","A06","A07","A08","A09","A10","A11","A12","A13","A14","A15","A16"][i]}, SP ${bank}, MIDI note ${36+i}): ${pd.name}${pd.st?`, pitch ${pd.st>0?"+":""}${pd.st} st`:""}${pd.st&&pd.warp?" (length kept)":""}${pd.rev?", reversed":""}${pd.cut?`, cut group ${" AB"[pd.cut]}`:""}`)});
   if(BT.events.length){files.push({name:`${nm}_kit/${nm}_pattern_${BT.bpm}bpm.mid`,data:midiFile(BT)});files.push({name:`${nm}_kit/${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(bounceBeat(BT,sr),sr,{bpm:BT.bpm,beats:BT.bars*4,root:0,one:false})})}
-  const txt=`Sample Machine 2 kit: ${S.name||"beat"}\nTempo: ${BT.bpm} BPM, ${BT.bars} bar pattern, swing ${BT.swing}%\n\n${lines.join("\n")}\n\nHow to load it\n- MPC: drag the PadNN WAVs onto pads A01-A16 in order (or into a drum program), then import the .mid file. Pad 1 = note 36 (C1), the standard MPC / drum-rack layout.\n- SP-404: copy the WAVs to the SD card import folder and load Pad01-16 into bank A-D, pads 1-4 each.\n- DAW (Ableton Drum Rack, FL FPC, Logic Drum Machine Designer): drop the WAVs on pads starting at C1, then drag the .mid onto the track.\n- The beat WAV is exactly ${BT.bars} bars at ${BT.bpm} BPM, so it lines up in any DAW at that tempo.\n`;
+  const txt=`Producer Face kit: ${S.name||"beat"}\nTempo: ${BT.bpm} BPM, ${BT.bars} bar pattern, swing ${BT.swing}%\n\n${lines.join("\n")}\n\nHow to load it\n- MPC: drag the PadNN WAVs onto pads A01-A16 in order (or into a drum program), then import the .mid file. Pad 1 = note 36 (C1), the standard MPC / drum-rack layout.\n- SP-404: copy the WAVs to the SD card import folder and load Pad01-16 into bank A-D, pads 1-4 each.\n- DAW (Ableton Drum Rack, FL FPC, Logic Drum Machine Designer): drop the WAVs on pads starting at C1, then drag the .mid onto the track.\n- The beat WAV is exactly ${BT.bars} bars at ${BT.bpm} BPM, so it lines up in any DAW at that tempo.\n`;
   files.push({name:`${nm}_kit/README.txt`,data:new TextEncoder().encode(txt)});return{files,zipName:`${nm}_kit_${BT.bpm}bpm.zip`}}
 $("bexport").onclick=async()=>{if(!needPro("The MPC / SP export kit is part of Pro."))return;if(!BT.pads.some(Boolean)){toast("Put sounds on the pads first");return}const{files,zipName}=exportFiles();const dl=await downloads();
   if(!dl){try{plainSave(zipName,zip(files));toast("Saved "+zipName)}catch(e){toast("Couldn't save that file")}}else saveZip(zipName,files)};
@@ -1060,7 +1060,7 @@ async function polar(action,body){const opt={method:"POST",headers:{"Content-Typ
   try{const r=await fetch("https://api.polar.sh/v1/customer-portal/license-keys/"+action,opt);return{status:r.status,data:await r.json().catch(()=>({}))}}
   catch(e){const r=await fetch("/api/polar/"+action,opt);return{status:r.status,data:await r.json().catch(()=>({}))}}}
 async function licActivate(key){key=key.trim();if(!key)return"Paste the license key from your purchase email.";const org=CFG.polarOrg;
-  try{let act=null,r=await polar("activate",{key,organization_id:org,label:"Sample Machine on "+(navigator.platform||"device")});
+  try{let act=null,r=await polar("activate",{key,organization_id:org,label:"Producer Face on "+(navigator.platform||"device")});
     if(r.status===200)act=r.data.id;else if(r.status===404)return"That key wasn't found. Check you copied all of it.";
     else if(r.status!==403)return"Couldn't reach the license server. Check your connection and try again.";
     const v=await polar("validate",act?{key,organization_id:org,activation_id:act}:{key,organization_id:org});

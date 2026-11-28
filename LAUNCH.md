@@ -18,7 +18,7 @@ const CFG={
 ## 1. Polar (payments, tax, license keys)
 
 1. Create an account at polar.sh and finish identity and payout setup.
-2. Create a product **Sample Machine Pro** with two prices: monthly ($5) and yearly ($40). Optional: a one-time "Lifetime (launch deal)".
+2. Create a product **Producer Face Pro** with two prices: monthly ($5) and yearly ($40). Optional: a one-time "Lifetime (launch deal)".
 3. Add a **License key** benefit to the product. Set an activation limit of **3** (phone, laptop, one spare). No expiry: the key stops working by itself when a subscription ends.
 4. Copy the **organization ID** (Settings) into `polarOrg`, the product's **checkout link** into `checkout`, and your **customer portal** link into `portal`.
 
@@ -40,7 +40,7 @@ Put it in `support` in `CFG`, and replace `SUPPORT_EMAIL` in `terms.html` and `p
 
 ## 4. Name
 
-The app is still called "Sample Machine 2" in `index.html` (`<title>`, the `apple-mobile-web-app-title` meta tag, the `<h1>`, and the kit readme text). Change all of them to the final name.
+The app is named **Producer Face** (domain: producerface.com). Support email: producerface.help@gmail.com.
 
 ## What's free and what's Pro
 
