@@ -529,9 +529,14 @@ function rank(){const all=chopSet(S.bars);if(!all.length){S.best=[];S.weird=[];r
     if(brk.has(c.id))why.unshift("Drum break");else if(opn.has(c.id)){s*=intro?1.6:1.25;why.unshift(intro?"Intro, no drums":"No drums")}else if(intro&&f.level<med*.8){s*=1.15;why.unshift("Intro")}
     c.rs=s;c.why=why});
   /* one of each part: a chorus that comes back four times shows up once, its cleanest take */
+  /* loudness shouldn't decide: soft soul records lose to their own loud choruses otherwise, so pull every score toward the song's own level */
+  all.forEach((c,i)=>{const r=F[i].level/med;if(r>=.12&&r<1)c.rs*=Math.min(1.6,1/(.55+.45*r))});
+  /* the opening is where the classic samples live: the first real music in the song always makes the top two (top spot if it has no drums) */
+  const op=all.find((c,i)=>F[i].level>=med*.12&&c.start<Math.max(20,S.dur*.12));
+  if(op){const tops=[...all].sort((a,b)=>b.rs-a.rs),t0=tops[0];if(op!==t0){if(op.why[0]==="Intro, no drums")op.rs=Math.max(op.rs,t0.rs*1.01);else op.rs=Math.max(op.rs,(tops[1]===op?op.rs:tops[1].rs*1.01))}if(!op.why.some(w=>/Intro/.test(w)))op.why.unshift("Intro")}
   const sc=[...all].sort((a,b)=>b.rs-a.rs),pick=[],want=Math.max(6,Math.min(12,Math.floor(all.length/3)));
   const same=(a,b)=>{const fa=chopFeat(a),fb=chopFeat(b);return fa.cos(fa.avg,fb.avg)>.985&&Math.abs(Math.log((fa.level+1e-9)/(fb.level+1e-9)))<.35};
-  for(const c of sc){if(pick.length>=want)break;if(c.rs<=(sc[0].rs||0)*.2)continue;if(pick.some(p=>same(p,c)))continue;pick.push(c)}
+  for(const c of sc){if(pick.length>=want)break;if(c.rs<=(sc[0].rs||0)*.2)continue;if(c!==op&&pick.some(p=>same(p,c)))continue;pick.push(c)}
   const floor=(sc[0]&&sc[0].rs||0)*.35;for(const c of sc){if(pick.length>=6)break;if(!pick.includes(c)&&c.rs>floor)pick.push(c)}if(!pick.length&&sc[0])pick.push(sc[0]);
   const bi=new Set(pick.map(c=>c.id));S.best=pick;S.weird=sc.filter(c=>!bi.has(c.id)).slice(-8).reverse();S.rk={all,best:S.best,weird:S.weird}}
 function byId(id){if(id.startsWith("os_"))return S.shots.find(s=>s.id===id);const[b,n]=id.slice(1).split("_").map(Number);return chopSet(b)[n-1]}

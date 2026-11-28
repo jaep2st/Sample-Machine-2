@@ -34,6 +34,11 @@ const cos = (a, b) => { let d = 0, x = 0, z = 0; for (let k = 0; k < 12; k++) { 
   await load({ name: "soul intro", tempo: () => 90, dur: 120, pat: BOOM, bass: 1, piano: 1, drumsFrom: 16, seed: 21 });
   const ip = S.best.findIndex(c => c.end <= 16.5);
   check(ip >= 0 && ip <= 1, `Drumless intro: ranked #${ip + 1} in Best (${S.best[Math.max(0, ip)].why.join(", ")})`);
+  // 5. intro WITH light drums and quieter than the rest (soul record): should still make the top two
+  await load({ name: "soft soul", tempo: () => 92, dur: 150, pat: BOOM, bass: 1, piano: 1, seed: 33 });
+  { const n = Math.floor(14 * S.sr); for (const ch of S.ch) for (let i = 0; i < n; i++) ch[i] *= .45; S.y = A.mono(S.ch); S.sets = {}; S.rk = null; S.brk = null; S.opn = null; S.pk = null; S.env = await A.onsetEnv(S.y, S.sr); A.setBpm(A.tempo(S.env, S.sr / 512), true); A.rank() }
+  const sp = S.best.findIndex(c => c.start < 3);
+  check(sp >= 0 && sp <= 1, `Soft intro with drums: opening chop ranked #${sp + 1} (${sp >= 0 ? S.best[sp].why.join(", ") : "missing"})`);
   console.log(fails ? `\n${fails} check(s) FAILED` : "\nAll Best checks passed");
   process.exit(fails ? 1 : 0);
 })();
