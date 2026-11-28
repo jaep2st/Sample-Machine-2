@@ -61,9 +61,9 @@ async function sendCode(body) {
   const email = String(body.email || "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return out({ error: "That email doesn't look right." }, 400);
   const r = await call("/customer-portal/customer-session/request", { method: "POST", body: { email, organization_id: ORG } });
-  // same answer whether or not the email has bought, so nobody can use this to look up customers
-  if (r.status >= 500) return out({ error: "Couldn't send the code right now. Try again in a minute." }, 502);
-  return out({ sent: true });
+  if (r.status === 200 || r.status === 202) return out({ sent: true });
+  // anything else: say so plainly (with Polar's status number, so a problem is easy to report)
+  return out({ error: `Couldn't send the code right now (error ${r.status}). Try again, or use your license key below.` }, 502);
 }
 
 async function login(body) {
