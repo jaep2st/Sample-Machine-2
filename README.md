@@ -14,4 +14,9 @@ Chop any track into beat-snapped loops and one-shots, right in your browser.
 - Real low-pass and high-pass filters, SP-1200-style grit and vinyl
 - Your audio never leaves your device
 
-The optional second beat finder uses [Essentia.js](https://essentia.upf.edu/) (AGPL-3.0). Set `USE_ESSENTIA = false` in `index.html` to ship without it.
+- Beat section: 16 pads, step sequencer with swing, live record, cut groups, bounce, MPC / SP export kit
+- Isolate (drums / no drums / centre / sides), sessions, smarter Best picks
+
+The Essentia.js second beat finder is switched off (`USE_ESSENTIA = false`) because its licence doesn't allow commercial use without a paid licence.
+
+**Selling it:** see [LAUNCH.md](LAUNCH.md) for the Free / Pro setup (Polar), hosting (Cloudflare Pages) and support email.
