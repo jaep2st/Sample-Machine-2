@@ -2,8 +2,6 @@
 // so they never have to find it themselves.
 //
 //   POST /api/pro/claim  {checkout_id}   right after checkout (Polar sends the buyer back with this id)
-//   POST /api/pro/code   {email}         emails the buyer a 6-digit sign-in code (Polar sends it)
-//   POST /api/pro/login  {code}          swaps that code for the buyer's key
 //
 // Every answer is {key} on success, {pending:true} while Polar is still issuing the key,
 // or {error:"message for the buyer"}.
@@ -11,7 +9,7 @@
 // claim needs one secret, set in Cloudflare (Workers & Pages > producerface > Settings >
 // Variables and secrets): POLAR_TOKEN = a Polar organization access token with the scopes
 // checkouts:read and customer_sessions:write. It never reaches the browser.
-// code and login use Polar's public customer sign-in and need no secret.
+// Buyers on a new device get their key from Polar's customer portal instead.
 
 const ORG = "cbc6d623-cf5e-4685-984a-88aab7e7e41f";
 const API = "https://api.polar.sh/v1";
@@ -52,27 +50,9 @@ async function claim(env, body) {
   if (c.data.status !== "succeeded") return out({ pending: true }, 202);
   if (!c.data.customer_id) return out({ pending: true }, 202);
   const s = await call("/customer-sessions/", { method: "POST", token: env.POLAR_TOKEN, body: { customer_id: c.data.customer_id } });
-  if (!s.data.token) return out({ error: "We couldn't open your account. Use 'Unlock with email' instead." }, 502);
+  if (!s.data.token) return out({ error: "We couldn't open your account. Tap Get my key instead." }, 502);
   const key = await keyFor(s.data.token);
   return key ? out({ key }) : out({ pending: true }, 202);
-}
-
-async function sendCode(body) {
-  const email = String(body.email || "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return out({ error: "That email doesn't look right." }, 400);
-  const r = await call("/customer-portal/customer-session/request", { method: "POST", body: { email, organization_id: ORG } });
-  if (r.status === 200 || r.status === 202) return out({ sent: true });
-  // anything else: say so plainly (with Polar's status number, so a problem is easy to report)
-  return out({ error: `Couldn't send the code right now (error ${r.status}). Try again, or use your license key below.` }, 502);
-}
-
-async function login(body) {
-  const code = String(body.code || "").trim();
-  if (!/^[A-Za-z0-9]{4,12}$/.test(code)) return out({ error: "Type the code from the email." }, 400);
-  const r = await call("/customer-portal/customer-session/authenticate", { method: "POST", body: { code } });
-  if (!r.data.token) return out({ error: "That code didn't work. Check it, or send a new one." }, 401);
-  const key = await keyFor(r.data.token);
-  return key ? out({ key }) : out({ error: "No active Pro plan on that email. Used a different email at checkout?" }, 404);
 }
 
 export async function onRequestPost({ params, request, env }) {
@@ -83,8 +63,6 @@ export async function onRequestPost({ params, request, env }) {
   try { body = JSON.parse(raw || "{}"); } catch (e) { return out({ error: "Bad request" }, 400); }
   try {
     if (action === "claim") return await claim(env, body);
-    if (action === "code") return await sendCode(body);
-    if (action === "login") return await login(body);
   } catch (e) {
     return out({ error: "Couldn't reach the license server. Try again in a minute." }, 502);
   }

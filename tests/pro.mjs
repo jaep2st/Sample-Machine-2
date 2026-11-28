@@ -13,11 +13,8 @@ console.log("claim ok",await req("claim",{checkout_id:id}));
 state="open";console.log("claim pending",await req("claim",{checkout_id:id}));state="succeeded";
 console.log("claim no token",await req("claim",{checkout_id:id},{}));
 console.log("claim bad id",await req("claim",{checkout_id:"x"}));
-console.log("code",await req("code",{email:"a@b.com"}),await req("code",{email:"nope"}));
-console.log("login ok",await req("login",{code:"ABC123"}),"bad",await req("login",{code:"ZZZ999"}));
-keys=[];console.log("login no plan",await req("login",{code:"ABC123"}));
 console.log("unknown",await req("hack",{}));
 // pass/fail for CI
 state="succeeded";keys=[{key:"PF-NEW",created_at:"2026-11-28T00:00:00Z",expires_at:null}];
-const ok=(await req("claim",{checkout_id:id}))[1].key==="PF-NEW"&&(await req("login",{code:"ABC123"}))[1].key==="PF-NEW"&&(await req("login",{code:"ZZZ999"}))[0]===401&&(await req("claim",{checkout_id:id},{}))[0]===503;
+const ok=(await req("claim",{checkout_id:id}))[1].key==="PF-NEW"&&(await req("claim",{checkout_id:id},{}))[0]===503&&(await req("login",{code:"ABC123"}))[0]===404;
 console.log(ok?"PRO UNLOCK: PASS":"PRO UNLOCK: FAIL");process.exit(ok?0:1);
