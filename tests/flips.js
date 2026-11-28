@@ -37,8 +37,14 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     const r = A.render(it), L = r.seg.length;
     check(L === want(p.bpm) && finite(r.chs) && peak(r.chs) <= 1, `${A.MODES[m].name}: exact length at ${p.bpm} BPM, no bad samples, no clipping`);
     if (m === "soul") check(p.tape && p.bpm > 90 && Math.abs(L / plain.seg.length - 90 / p.bpm) < 1e-3 && /Tape speed \+/.test(r.st.join(" ")), `Soul Speed-Up: tape-style speed-up to ${p.bpm} BPM, pitch rises with it (${r.st.find(x => /Tape/.test(x))})`);
-    if (m === "micro" || m === "offgrid") check(corr(r.seg, plain.seg) < .9 && p.flip.pat[0] === 0, `${A.MODES[m].name}: slices re-sequenced (similarity to original ${corr(r.seg, plain.seg).toFixed(2)}), downbeat kept`);
-    if (m === "offgrid") check(p.flip.swing > 0 && p.flip.hum, "Off-Grid Flip: swing and human timing applied");
+    if (m === "micro" || m === "offgrid") {
+      const ev = p.flip.events, rms = y => Math.sqrt(y.reduce((a, v) => a + v * v, 0) / y.length);
+      const srcs = new Set(ev.map(e => e.src)), ons = new Set(A.onsetsIn(plain.seg, sr).map(o => o / plain.seg.length));
+      check(ev[0].at === 0 && ev[0].src === 0, `${A.MODES[m].name}: opens on the original downbeat`);
+      check([...srcs].every(v => ons.has(v)), `${A.MODES[m].name}: every chop starts where a note starts (${srcs.size} different chops used)`);
+      check(srcs.size >= 3 && ev.length >= it.bars * 4 && corr(r.seg, plain.seg) < .9, `${A.MODES[m].name}: a real re-arrangement (${ev.length} hits over ${it.bars} bars, similarity to original ${corr(r.seg, plain.seg).toFixed(2)})`);
+      check(rms(r.seg) > rms(plain.seg) * .5, `${A.MODES[m].name}: full-sounding, not gappy (level ${(rms(r.seg) / rms(plain.seg) * 100).toFixed(0)}% of the original)`) }
+    if (m === "offgrid") check(p.flip.swing > 0, "Off-Grid Flip: MPC-style swing applied");
     if (m === "bass") check(hf(r.seg) < hf(plain.seg) * .05, `Filtered Bass: highs removed (${(hf(r.seg) / hf(plain.seg) * 100).toFixed(1)}% left)`);
     if (m === "dusty") check(hf(r.seg) < hf(plain.seg), "Dusty Loop: top end softened");
   }
@@ -51,8 +57,11 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     check(worstHit > .98, `loop seams: first hit of every loop is untouched (worst match ${worstHit.toFixed(3)})`);
     check(worstJump < 6, `loop seams: last sample flows into the first, forward and reversed (worst jump ${worstJump.toFixed(1)}x a normal step)`) }
   // flips re-roll: pressing a flip mode twice gives a different pattern
-  S.params[it.id] = A.base(); let p = A.P(it.id); A.MODES.micro.go(p, it); const p1 = p.flip.pat.join(); A.MODES.micro.go(p, it);
-  check(p.flip.pat.join() !== p1, "Micro-Chop Flip: tapping again gives a new flip");
+  S.params[it.id] = A.base(); let p = A.P(it.id); A.MODES.micro.go(p, it); const p1 = JSON.stringify(p.flip.events); A.MODES.micro.go(p, it);
+  check(JSON.stringify(p.flip.events) !== p1, "Micro-Chop Flip: tapping again gives a new flip");
+  // longer chops: a 4-bar flip builds hook, repeat, hook, answer
+  { const it4 = A.chopSet(4)[1]; S.params[it4.id] = A.base(); const q4 = A.P(it4.id); A.MODES.micro.go(q4, it4); S.cache.clear(); const r4 = A.render(it4);
+    check(r4.seg.length === Math.round(16 * 60 / 90 * sr) && q4.flip.events.length >= 16 && finite(r4.chs), `Micro-Chop Flip on 4 bars: exact length, ${q4.flip.events.length} hits`) }
   // stab kit: finds a real hit inside the chop
   const st = A.findStab(it);
   check(st.t >= it.start && st.t < it.end && st.len >= .12, `Stab Kit: picked a ${st.len.toFixed(2)} s hit inside the chop`);

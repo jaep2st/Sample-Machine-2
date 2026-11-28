@@ -242,6 +242,20 @@ function vinyl(xs,sr){let sd=99991;const r=()=>(sd=sd*16807%2147483647)/21474836
 function flipChs(chs,flip,sr){const N=flip.pat.length,L=chs[0].length,sl=L/N,fd=Math.max(8,Math.floor(.003*sr)),sw=flip.swing||0;
   return chs.map(x=>{const o=new Float32Array(L);for(let k=0;k<N;k++){const src=flip.pat[k],odd=k%2===1;let at=Math.round(k*sl+(odd?sw*sl:0)+(flip.hum?flip.hum[k]*sr:0));
     const len=Math.round(sl*(odd?1-sw:1+sw)),a=Math.round(src*sl);for(let i=0;i<len;i++){const g=Math.min(1,i/fd,(len-1-i)/fd);if(g<=0)continue;const di=((at+i)%L+L)%L;o[di]+=x[(a+i)%L]*g}}return o})}
+/* play an event flip: each hit fires a chop (taken from the loop) at its time and rings until the next hit cuts it off, like an MPC in mono mode */
+function flipEvents(chs,flip,sr){const L=chs[0].length,fi=Math.max(8,Math.floor(.001*sr)),fo=Math.max(16,Math.floor(.004*sr));
+  return chs.map(x=>{const o=new Float32Array(L);for(const ev of flip.events){const at=Math.round(ev.at*L),src=Math.round(ev.src*L);let len=Math.min(Math.round(ev.len*L),L-at);if(len<=0)continue;
+    const r=ev.st?2**(ev.st/12):1,need=Math.ceil(len*r)+64,piece=new Float32Array(need);for(let i=0;i<need;i++)piece[i]=x[(src+i)%L];
+    const pc=r===1?piece:resample(piece,r);len=Math.min(len,pc.length);for(let i=0;i<len;i++)o[at+i]+=pc[i]*Math.min(1,i/fi,(len-1-i)/fo)*ev.g}return o})}
+/* note starts inside a loop, to the sample: where a producer would set a chop point */
+function onsetsIn(x,sr){const H=64,n=Math.floor(x.length/H),e=new Float32Array(n);for(let k=0;k<n;k++){let s=0;for(let i=0;i<H;i++)s+=Math.abs(x[k*H+i]);e[k]=Math.log(1e-4+s/H)}
+  const d=new Float32Array(n);for(let k=3;k<n;k++)d[k]=Math.max(0,e[k]-e[k-3]);let m=0,sd=0;for(const v of d)m+=v;m/=n||1;for(const v of d)sd+=(v-m)**2;sd=Math.sqrt(sd/(n||1));
+  const gap=Math.floor(.06*sr/H),W=Math.max(8,Math.floor(.001*sr)),out=[0];let last=-gap;
+  for(let k=2;k<n-2;k++){const v=d[k];if(v>m+sd&&v>=d[k-1]&&v>=d[k+1]&&v>=d[k-2]&&v>=d[k+2]&&k-last>=gap&&k*H>.04*sr){let best=-1,bi=k*H;
+    for(let i=Math.max(W,(k-4)*H);i<Math.min(x.length-W,(k+1)*H);i+=4){let a=0,b=0;for(let j=0;j<W;j+=2){a+=Math.abs(x[i-W+j]);b+=Math.abs(x[i+j])}if(b-a>best){best=b-a;bi=i}}
+    out.push(Math.max(0,bi-Math.floor(.0015*sr)));last=k}}return out}
+function chromaSeg(x,at,sr){const N=4096,w=hann(N),re=new Float64Array(N),im=new Float64Array(N),c=new Float64Array(12),o=at+Math.floor(.01*sr);for(let i=0;i<N;i++){re[i]=(x[(o+i)%x.length]||0)*w[i];im[i]=0}fft(re,im);
+  for(let b=Math.ceil(60*N/sr);b<Math.floor(2000*N/sr);b++)c[((Math.round(12*Math.log2(b*sr/N/440))+69)%12+12)%12]+=Math.sqrt(re[b]*re[b]+im[b]*im[b]);let t=0;for(const v of c)t+=v;if(t)for(let k=0;k<12;k++)c[k]/=t;return c}
 /* attack strength at each slice start, used to pick punchy slices for flips */
 function sliceHits(seg,N){const L=seg.length,sl=L/N,w=Math.max(16,Math.floor(sl/6)),out=[];for(let k=0;k<N;k++){const a=Math.round(k*sl);let e0=0,e1=0;for(let i=0;i<w;i++){e1+=Math.abs(seg[a+i]||0);e0+=Math.abs(seg[(a-w+i+L)%L]||0)}out.push(e1-e0*.6)}return out}
 function fx(x,style,sr){if(x.length<100)return x;const th=(a,g,m)=>{for(let i=0;i<a.length;i++)a[i]=Math.tanh(a[i]*g)*m;return a};let o;
@@ -490,7 +504,8 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
         if(cg>=short){for(let i=0;i<cg;i++){const t=(i+.5)/cg*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}seam=true}else edgeFade(seg,sr)}
       return seg})}
   else chs=xs.map(seg=>{const fi=Math.min(Math.floor(.002*sr),seg.length>>3),fo=Math.min(Math.floor(.015*sr),seg.length>>2);for(let i=0;i<fi;i++)seg[i]*=i/fi;for(let i=0;i<fo;i++)seg[seg.length-1-i]*=i/fo;return seg});
-  if(chop&&p.flip){chs=flipChs(chs,p.flip,sr);st.push(p.flip.swing?`Flipped, ${Math.round(50+p.flip.swing*50)}% swing`:"Flipped")}
+  if(chop&&p.flip){if(p.flip.events){chs=flipEvents(chs,p.flip,sr);st.push(`Flipped: ${p.flip.pads} chops on pads, ${p.flip.hits} hits${p.flip.swing?`, ${Math.round(50+p.flip.swing*50)}% swing`:""}`)}
+    else{chs=flipChs(chs,p.flip,sr);st.push(p.flip.swing?`Flipped, ${Math.round(50+p.flip.swing*50)}% swing`:"Flipped")}}
   normAll(chs);if(seam)st.push("Seamless loop");if(chs.length>1)st.push("Stereo");const seg=chs[0];
   let name=`${chop?p.bpm:bb}bpm_${key.replace(" ","_")}_${chop?"chop":"oneshot"}${String(it.n).padStart(2,"0")}${chop?"_"+it.id.slice(1).split("_")[0]+"bar":""}_${s.toFixed(1)}s`;
   if(tapeSt)name+=`_tape${tapeSt>0?"+":""}${tapeSt}`;else if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");if(p.mode)name+="_"+p.mode.toLowerCase().replace(/[^a-z]+/g,"");
@@ -553,12 +568,28 @@ function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textCont
 let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
 function changed(){S.params[S.sel.id].rand=false;labels();estat()}
 let mseed=(Date.now()%2147483646)+1;const mr=()=>(mseed=mseed*16807%2147483647)/2147483647;
-/* build a flip: slice the loop into 8th notes, keep the downbeat, swap in the punchiest slices, answer the first phrase with a variation */
+/* proven chop rhythms, one bar of 16th notes each: x = hit a pad */
+const RHY=["x..x..x.x..x.x..","x.x...x.x.x...x.","x...x.x...x.x...","x..x...x..x.x...","x.x.x..x.x..x...","x...x..xx...x.x.","x..x..x...x..x..","x.xx..x.x..x..x.","x.......x..x....","x..x.x....x..x.."];
+/* build a flip the way a producer would: cut chops where notes start, load the strongest ones that fit the loop's harmony onto pads
+   (pad 1 = the original downbeat), play them in a proven rhythm, repeat the hook and answer it, end phrases with a stutter fill */
 function makeFlip(it,p,swing,human){const q={...p,flip:null,mode:""},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
-  const B=it.bars,N=B<=4?B*8:32,hits=sliceHits(r.seg,N),cand=[...hits.keys()].sort((a,b)=>hits[b]-hits[a]).slice(0,Math.max(4,N>>1)),pick=()=>cand[Math.floor(mr()*cand.length)];
-  const ph=Math.min(N,16),phrase=[];for(let k=0;k<ph;k++)phrase.push(k===0?0:mr()<.35?k:pick());
-  const pat=[];for(let k=0;k<N;k++){const pos=k%ph,last=Math.floor(k/ph)%2===1&&pos>=ph-3;pat.push(last?pick():phrase[pos])}
-  const hum=human?pat.map((_,k)=>{const b=k%8;return b===2||b===6?-.008:(mr()*2-1)*.004}):null;return{pat,swing,hum}}
+  const x=r.seg,L=x.length,sr=S.sr,B=it.bars,s16=L/B/16,ons=onsetsIn(x,sr);
+  const env=a=>{let s=0;const n=Math.min(L-a,Math.floor(.03*sr));for(let i=0;i<n;i++)s+=Math.abs(x[a+i]);return s/Math.max(1,n)};
+  const all=ons.map((a,i)=>({a,dur:(ons[i+1]||L)-a,str:env(a),ch:chromaSeg(x,a,sr)})),mean=new Float64Array(12);all.forEach(c=>c.ch.forEach((v,k)=>mean[k]+=v));
+  const cos=(u,v)=>{let d=0,a=0,b=0;for(let k=0;k<12;k++){d+=u[k]*v[k];a+=u[k]*u[k];b+=v[k]*v[k]}return d/Math.sqrt(a*b||1)},ms=Math.max(...all.map(c=>c.str))||1;
+  all.forEach(c=>c.sc=.6*c.str/ms+.4*cos(c.ch,mean)+(c.dur>.08*sr?.1:-.3));
+  const pads=[all[0],...all.slice(1).filter(c=>c.dur>.05*sr).sort((a,b)=>b.sc-a.sc).slice(0,7)];
+  const pick=prev=>{for(let t=0;t<8;t++){const i=1+Math.floor((mr()**1.4)*(pads.length-1));if(pads[i]&&i!==prev)return i}return 0};
+  const rh=RHY[Math.floor(mr()*RHY.length)],hits=[...rh].map((c,i)=>c==="x"?i:-1).filter(i=>i>=0),hook=hits.map((_,i)=>i===0?0:pick(-1));
+  const fill=mr()<.6,pitchAns=mr()<.35,events=[];
+  for(let b=0;b<B;b++){const blk=b%4,answer=blk%2===1,end=B>1&&(b===B-1||blk===3);let seq=hook.slice(),steps=hits.slice();
+    if(answer)for(let i=Math.max(1,seq.length-2);i<seq.length;i++)seq[i]=pick(seq[i-1]);
+    let fillFrom=99;if(end&&fill){const keep=steps.filter(s=>s<12).length;steps=steps.slice(0,keep);seq=seq.slice(0,keep);const fp=mr()<.5?0:(seq[seq.length-1]||0);for(const s of [12,13,14,15]){steps.push(s);seq.push(fp)}fillFrom=keep}
+    steps.forEach((s,i)=>{const pad=pads[seq[i]]||pads[0];let at=(b*16+s)*s16;if(swing&&s%2===1)at+=swing*s16;if(human&&s!==0)at+=((s===4||s===12)?-.008:(mr()*2-1)*.004)*sr;
+      const st=pitchAns&&answer&&i===steps.length-1&&i<fillFrom?(mr()<.5?7:-5):0,g=i>=fillFrom?.6+.13*(i-fillFrom):s%4===0?1:.85;
+      events.push({at:Math.max(0,at)/L,src:pad.a/L,g,st})})}
+  events.sort((a,b)=>a.at-b.at);events.forEach((e,i)=>{e.len=Math.max(1/L,(i+1<events.length?events[i+1].at:1)-e.at);if(e.len*L>6*s16&&mr()<.4)e.len/=2});
+  return{events,pads:pads.length,hits:events.length,swing}}
 const MODES={
   soul:{name:"Soul Speed-Up",go(p){const n=Math.max(2,Math.min(7,Math.round(12*Math.log2(94/S.bpm))));Object.assign(p,{tape:true,bpm:Math.round(S.bpm*2**(n/12)),hp:110,style:"Warm"})}},
   micro:{name:"Micro-Chop Flip",go(p,it){p.flip=makeFlip(it,p,0,false)}},

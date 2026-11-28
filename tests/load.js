@@ -10,7 +10,7 @@ module.exports = function load() {
   global.document = { getElementById: el, querySelectorAll: () => [], body: { classList: { add() {}, remove() {} } } };
   global.localStorage = { getItem: () => null, setItem() {} };
   const code = "let status=()=>{};\n" + (js.slice(0, js.indexOf("let favs")) + js.slice(a, b)).replace(/function status\(m\)\{[^}]*\}/, "") + "\n" + js.slice(m0, m1) +
-    "\nmodule.exports={S,P,base,setBpm,onsetEnv,tempo,detectKey,chopSet,render,mono,breaks,opens,findStab,buildDrumKit,getKit:()=>kit,MODES,makeFlip,filt,grit,wav,KEYS,resample};";
+    "\nmodule.exports={S,P,base,setBpm,onsetEnv,tempo,detectKey,chopSet,render,mono,breaks,opens,findStab,buildDrumKit,getKit:()=>kit,MODES,makeFlip,filt,grit,wav,KEYS,resample,onsetsIn:typeof onsetsIn!=='undefined'?onsetsIn:null};";
   const tmp = path.join(os.tmpdir(), `sm_engine_${process.pid}_${Date.now()}.js`);
   fs.writeFileSync(tmp, code);
   const A = require(tmp);
