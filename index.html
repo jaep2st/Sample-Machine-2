@@ -35,7 +35,7 @@ header p{margin:4px 0 0;color:var(--mute)}
 .onboard{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;background:var(--panel);border-top:1px solid var(--line);padding-block:16px}
 .onboard h2{margin:0 0 6px;font-size:20px}.onboard ol{margin:0;padding-left:1.3em;line-height:1.55;max-width:46rem}
 .prosheet{position:fixed;inset:0;z-index:60;background:rgb(0 0 0/.55);display:flex;align-items:flex-end;justify-content:center;padding:12px}
-.prosheet[hidden]{display:none}
+.prosheet[hidden]{display:none}.hstip{position:fixed;left:12px;right:12px;bottom:12px;z-index:55;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgb(0 0 0/.25)}.hstip[hidden]{display:none}.hstip p{margin:0;font-size:14px;line-height:1.35}.hstip .btn{flex:none}
 .probox{position:relative;background:var(--bg);color:var(--ink);border-radius:18px;padding:22px 20px 18px;max-width:440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgb(0 0 0/.4)}
 @media (min-width:700px){.prosheet{align-items:center}}
 .probox h2{margin:0 36px 6px 0;font-size:24px}.prowhy{margin:0 0 10px;color:var(--hot);font-weight:700}.prowhy:empty{display:none}
@@ -181,6 +181,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
   <li><b>Tap a chop to open it:</b> flip it, change tempo or pitch, send it to the Beat pads, or save it. Every loop comes out at a whole-number BPM, so it drops straight into your DAW.</li></ol></div>
   <button class="btn" id="obok">Got it</button>
 </section>
+<div class="hstip" id="hstip" hidden role="status"><p><b>Keep Pro unlocked:</b> tap <b>Share</b> then <b>Add to Home Screen</b>. iPhone forgets websites you don't open for a week; the Home Screen app never does.</p><button class="btn" id="hstipok">Got it</button></div>
 <div class="prosheet" id="prosheet" hidden role="dialog" aria-modal="true" aria-labelledby="protitle">
   <div class="probox">
     <button class="ib proclose" id="proclose" aria-label="Close">✕</button>
@@ -1099,7 +1100,12 @@ $("proact").onclick=async()=>{const b=$("proact");b.disabled=true;$("prost").tex
 async function proApi(action,body){try{const r=await fetch("/api/pro/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   return{status:r.status,data:await r.json().catch(()=>({}))}}catch(e){return{status:0,data:{error:"Couldn't reach the server. Check your connection and try again."}}}}
 async function useKey(key){const err=await licActivate(key);if(err){$("prost").textContent=err;return false}
-  $("prost").textContent="";proUi();hidePro();toast("Pro unlocked. Welcome!");return true}
+  $("prost").textContent="";proUi();hidePro();toast("Pro unlocked. Welcome!");homeTip();return true}
+/* iPhone Safari clears a site's saved data after 7 days unused; a Home Screen app keeps it. Tell Pro users once. */
+function homeTip(){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1),
+  home=navigator.standalone||matchMedia("(display-mode: standalone)").matches;let seen=0;try{seen=localStorage.getItem("sm2-hstip")}catch(e){}
+  if(!ios||home||seen)return;setTimeout(()=>{$("hstip").hidden=false},3200)}
+$("hstipok").onclick=()=>{$("hstip").hidden=true;try{localStorage.setItem("sm2-hstip","1")}catch(e){}};
 function askKey(msg){showPro("");$("prokeyd").open=true;$("prost").textContent=msg;setTimeout(()=>$("proemail").focus(),60)}
 $("prosend").onclick=async()=>{const b=$("prosend"),email=$("proemail").value.trim();if(!email){$("prost").textContent="Type the email you paid with.";return}
   b.disabled=true;$("prost").textContent="Sending…";const r=await proApi("code",{email});b.disabled=false;
