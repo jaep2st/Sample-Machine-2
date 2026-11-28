@@ -87,6 +87,14 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 #modes button{font-weight:600}
 #kitpads button{min-height:52px;border-radius:10px;border:0;background:var(--pad);color:var(--padink);font-weight:800;cursor:pointer}
 #kitpads button:active{background:var(--hot)}
+.slhint{margin:0 0 8px;color:var(--mute);font-size:15px}
+.slwrap{border:1px solid var(--line);border-radius:12px;background:var(--pad);overflow:hidden;margin-bottom:8px}
+#slc{display:block;width:100%;height:150px;touch-action:manipulation;cursor:crosshair}
+#slpos{width:100%;margin:0 0 8px}
+#slzoom{display:flex}#slzoom button{flex:1}
+#slpads{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;margin:4px 0 10px}
+#slpads button{min-height:40px;border-radius:8px;border:0;background:var(--pad);color:var(--padink);font-weight:800;cursor:pointer;font-size:14px}
+#slpads button:active{background:var(--hot)}
 .styles button[aria-pressed=true]{background:var(--hot);color:#fff;border-color:var(--hot)}
 .erow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .close{display:none}
@@ -201,6 +209,16 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <div id="kit" hidden style="margin:0 0 12px">
       <div id="kitpads" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px"></div>
       <div class="erow"><button class="btn" id="savekit">Save stab kit (8 pitched pads)</button><button class="btn" id="kitto">Send kit to pads</button></div>
+    </div>
+    <div class="erow" style="margin:0 0 12px"><button class="btn" id="slopen" aria-expanded="false">Chop it yourself</button></div>
+    <div id="slicer" hidden>
+      <p class="slhint">Tap the waveform to drop a chop point (it snaps to the nearest hit). Tap a point again to remove it. Then send the slices to pads.</p>
+      <div class="slwrap"><canvas id="slc" aria-label="Waveform of this chop. Tap to add or remove chop points."></canvas></div>
+      <input type="range" id="slpos" min="0" max="1000" value="0" aria-label="Scroll the waveform" hidden>
+      <div style="margin-bottom:8px"><span class="seg" id="slzoom"><button data-z="1" aria-pressed="true">1×</button><button data-z="2">2×</button><button data-z="4">4×</button><button data-z="8">8×</button></span></div>
+      <div class="erow"><button class="btn" id="slsnap" aria-pressed="true">Snap to hits</button><button class="btn" id="slauto">Every hit</button><button class="btn" id="sleven">Even 8ths</button><button class="btn" id="slclr">Clear points</button></div>
+      <div id="slpads"></div>
+      <div class="erow" style="margin-bottom:12px"><button class="btn red" id="slsend">Send slices to pads</button></div>
     </div>
     <div class="field"><label>Style</label></div>
     <div class="styles" id="styles"></div>
@@ -636,12 +654,12 @@ function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;d
   for(const f of["shift","ts","te","pitch"])$(f).value=p[f];t.value=p.bpm;$("rev").setAttribute("aria-pressed",p.rev);$("rev").textContent="Reverse: "+(p.rev?"on":"off");
   for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);
   for(const b of $("modes").children)b.setAttribute("aria-pressed",!!p.mode&&MODES[b.dataset.m]&&MODES[b.dataset.m].name===p.mode);
-  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);
+  if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);if(SL.open)setTimeout(slLoad,0);
   $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
 function closeEditor(){$("editor").hidden=true;document.body.classList.remove("sheet")}
 function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm;$("o_lpf").textContent=p.lp?(p.lp>=1000?(p.lp/1000).toFixed(1)+" kHz":p.lp+" Hz"):"off";$("o_hpf").textContent=p.hp?p.hp+" Hz":"off"}
 let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
-function changed(){S.params[S.sel.id].rand=false;labels();estat()}
+function changed(){S.params[S.sel.id].rand=false;labels();estat();if(SL.open){clearTimeout(SL.t);SL.t=setTimeout(slLoad,250)}}
 let mseed=(Date.now()%2147483646)+1;const mr=()=>(mseed=mseed*16807%2147483647)/2147483647;
 /* proven chop rhythms, one bar of 16th notes each: x = hit a pad */
 const RHY=["x..x..x.x..x.x..","x.x...x.x.x...x.","x...x.x...x.x...","x..x...x..x.x...","x.x.x..x.x..x...","x...x..xx...x.x.","x..x..x...x..x..","x.xx..x.x..x..x.","x.......x..x....","x..x.x....x..x.."];
@@ -835,6 +853,39 @@ $("bbounce").onclick=()=>{if(!BT.events.length){toast("Program or record a patte
   saveZip(`${nm}_beat_${BT.bpm}bpm.zip`,[{name:`${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(out,sr,{bpm:BT.bpm,beats:BT.bars*4,root:Math.max(0,KEYS.indexOf((S.key||"C").split(" ")[0])),one:false})}])};
 $("topad").onclick=sendToPad;$("flipto").onclick=sendFlip;$("kitto").onclick=sendKit;
 renderBeat();
+
+/* ---------- chop it yourself: free slicing on the waveform ---------- */
+const SL={id:null,chs:null,len:0,marks:[0],hits:[],zoom:1,pos:0,snap:true,open:false};
+function slLoad(){const it=S.sel;if(!it)return;const p=P(it.id),q={...p,flip:null},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
+  const L=r.chs[0].length,fr=SL.id===it.id&&SL.len?SL.marks.map(m=>m/SL.len):[0];SL.id=it.id;SL.chs=r.chs.map(x=>x.slice());SL.len=L;
+  SL.hits=onsetsIn(mono(SL.chs),S.sr);SL.marks=[...new Set(fr.map(f=>Math.round(f*L)))].sort((a,b)=>a-b);if(SL.marks[0]!==0)SL.marks.unshift(0);slDraw()}
+function slView(){const w=SL.len/SL.zoom,a=Math.round(SL.pos*(SL.len-w));return[a,a+w]}
+function slDraw(){const cv=$("slc");if(!cv||!SL.chs)return;const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext("2d");g.scale(dpr,dpr);
+  const css=getComputedStyle(document.documentElement),ink=css.getPropertyValue("--padink")||"#eee",hot=css.getPropertyValue("--hot")||"#e33",[a,b]=slView(),x=SL.chs[0],y=SL.chs[SL.chs.length-1],spp=(b-a)/W;
+  g.fillStyle=ink;g.globalAlpha=.75;for(let px=0;px<W;px++){let mx=0;const s0=Math.floor(a+px*spp),s1=Math.max(s0+1,Math.floor(a+(px+1)*spp));for(let i=s0;i<s1;i+=Math.max(1,(s1-s0)>>6)){const v=Math.abs(x[i]+y[i])/2;if(v>mx)mx=v}const h=Math.max(1,mx*H*.9);g.fillRect(px,(H-h)/2,1,h)}
+  g.globalAlpha=.35;g.fillStyle=ink;const beat=SL.len/(4*Math.max(1,(S.sel&&S.sel.bars)||1));for(let t=0;t<SL.len;t+=beat){if(t<a||t>b)continue;g.fillRect((t-a)/spp,0,1,8)}
+  g.globalAlpha=1;g.font="bold 12px system-ui";SL.marks.forEach((m,k)=>{if(m<a||m>b)return;const px=(m-a)/spp;g.fillStyle=hot;g.fillRect(px-1,0,2,H);g.fillRect(px,0,18,16);g.fillStyle="#fff";g.fillText(k+1,px+3,12)});
+  $("slpads").innerHTML=SL.marks.slice(0,16).map((m,k)=>`<button data-k="${k}" aria-label="Play slice ${k+1}">${k+1}</button>`).join("");
+  $("slsend").textContent=`Send ${Math.min(16,SL.marks.length)} slice${SL.marks.length>1?"s":""} to pads`}
+function slSlice(k){const a=SL.marks[k],b=k+1<SL.marks.length?SL.marks[k+1]:SL.len,fo=Math.min(96,Math.floor((b-a)/4));return SL.chs.map(x=>{const o=x.slice(a,b);for(let i=0;i<fo;i++)o[o.length-1-i]*=i/fo;return o})}
+function slTap(e){const cv=$("slc"),r=cv.getBoundingClientRect(),[a,b]=slView(),s=Math.round(a+(e.clientX-r.left)/r.width*(b-a)),tol=14/r.width*(b-a);
+  const near=SL.marks.findIndex(m=>m>0&&Math.abs(m-s)<tol);if(near>0){SL.marks.splice(near,1);slDraw();return}
+  let t=s;if(SL.snap){let best=null;for(const h of SL.hits)if(Math.abs(h-s)<.08*S.sr&&(best===null||Math.abs(h-s)<Math.abs(best-s)))best=h;if(best!==null)t=best}
+  if(t<=0||SL.marks.some(m=>Math.abs(m-t)<.02*S.sr))return;SL.marks.push(t);SL.marks.sort((x,y)=>x-y);slDraw();playRaw(slSlice(SL.marks.indexOf(t)))}
+function slSend(){if(!SL.chs)return;const n=Math.min(16,SL.marks.length),it=S.sel,fresh=!BT.events.length;for(let k=0;k<n;k++)setPad(k,newPad(slSlice(k),`Slice ${k+1}`,"chop"));
+  if(fresh)setBbpm(P(it.id).bpm);BT.sel=0;renderBeat();toast(`${n} slices on pads 1–${n}`);$("editor").hidden=true;document.body.classList.remove("sheet");$("beat").scrollIntoView({behavior:"smooth",block:"start"})}
+$("slopen").onclick=()=>{SL.open=!SL.open;$("slicer").hidden=!SL.open;$("slopen").setAttribute("aria-expanded",SL.open);if(SL.open)slLoad()};
+$("slc").addEventListener("click",slTap);
+$("slzoom").onclick=e=>{const b=e.target.closest("button");if(!b)return;SL.zoom=+b.dataset.z;for(const x of $("slzoom").children)x.setAttribute("aria-pressed",x===b);$("slpos").hidden=SL.zoom===1;slDraw()};
+$("slpos").oninput=e=>{SL.pos=e.target.value/1000;slDraw()};
+$("slsnap").onclick=()=>{SL.snap=!SL.snap;$("slsnap").setAttribute("aria-pressed",SL.snap)};
+$("slauto").onclick=()=>{SL.marks=SL.hits.slice(0,16);if(SL.marks[0]!==0)SL.marks.unshift(0);SL.marks=SL.marks.slice(0,16);slDraw()};
+$("sleven").onclick=()=>{const n=Math.min(16,8*Math.max(1,(S.sel&&S.sel.bars)||1));SL.marks=Array.from({length:n},(_,k)=>Math.round(k*SL.len/n));
+  if(SL.snap)SL.marks=SL.marks.map(m=>{let best=m;for(const h of SL.hits)if(Math.abs(h-m)<.03*S.sr&&Math.abs(h-m)<Math.abs(best-m))best=h;return best});slDraw()};
+$("slclr").onclick=()=>{SL.marks=[0];slDraw()};
+$("slpads").addEventListener("pointerdown",e=>{const b=e.target.closest("button");if(b){e.preventDefault();playRaw(slSlice(+b.dataset.k))}});
+$("slsend").onclick=slSend;
+addEventListener("resize",()=>{if(SL.open)slDraw()});
 
 /* ---------- demo beat so the machine opens mid-use ---------- */
 function demo(){const sr=44100,bpm=92,beat=60/bpm,bars=16,n=Math.floor(bars*4*beat*sr),y=new Float32Array(n);let seed=7;const rnd=()=>(seed=seed*16807%2147483647)/2147483647*2-1;
