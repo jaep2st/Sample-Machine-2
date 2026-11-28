@@ -302,7 +302,7 @@ function flipChs(chs,flip,sr){const N=flip.pat.length,L=chs[0].length,sl=L/N,fd=
   return chs.map(x=>{const o=new Float32Array(L);for(let k=0;k<N;k++){const src=flip.pat[k],odd=k%2===1;let at=Math.round(k*sl+(odd?sw*sl:0)+(flip.hum?flip.hum[k]*sr:0));
     const len=Math.round(sl*(odd?1-sw:1+sw)),a=Math.round(src*sl);for(let i=0;i<len;i++){const g=Math.min(1,i/fd,(len-1-i)/fd);if(g<=0)continue;const di=((at+i)%L+L)%L;o[di]+=x[(a+i)%L]*g}}return o})}
 /* play an event flip: each hit fires a chop (taken from the loop) at its time and rings until the next hit cuts it off, like an MPC in mono mode */
-function flipEvents(chs,flip,sr){const L=chs[0].length,fi=Math.max(8,Math.floor(.001*sr)),fo=Math.max(16,Math.floor(.004*sr));
+function flipEvents(chs,flip,sr){const L=chs[0].length,fi=Math.max(8,Math.floor(.001*sr)),fo=Math.max(16,Math.floor(.012*sr));
   return chs.map(x=>{const o=new Float32Array(L);for(const ev of flip.events){const at=Math.round(ev.at*L),src=Math.round(ev.src*L);let len=Math.min(Math.round(ev.len*L),L-at);if(len<=0)continue;
     const r=ev.st?2**(ev.st/12):1,need=Math.ceil(len*r)+64,piece=new Float32Array(need);for(let i=0;i<need;i++)piece[i]=x[(src+i)%L];
     const pc=r===1?piece:resample(piece,r);len=Math.min(len,pc.length);for(let i=0;i<len;i++)o[at+i]+=pc[i]*Math.min(1,i/fi,(len-1-i)/fo)*ev.g}return o})}
@@ -736,42 +736,47 @@ function flipSlices(x,L,sr,bars){const ons=onsetsIn(x,sr),N=2048,w=hann(N),re=ne
   if(sl.filter(c=>c.dur>.06*sr).length<Math.max(4,bars*2)){const n=bars*8;sl=Array.from({length:n},(_,k)=>({a:Math.round(k*L/n),dur:Math.round(L/n),grid:true}))}
   sl.forEach(c=>{c.str=env(c.a);c.ch=chromaSeg(x,c.a,sr);c.br=bright(c.a)});const ms=Math.max(...sl.map(c=>c.str))||1;sl.forEach(c=>c.str/=ms);return sl}
 const cos12=(u,v)=>{let d=0,a=0,b=0;for(let k=0;k<12;k++){d+=u[k]*v[k];a+=u[k]*u[k];b+=v[k]*v[k]}return d/Math.sqrt(a*b||1)};
-function makeMicro(x,L,sr,B){const sl=flipSlices(x,L,sr,B),s16=L/B/16,cand=sl.filter(c=>c.dur>.06*sr&&c.str>.2);const use=cand.length>=3?cand:sl;
-  /* chord groups: anchor = the strongest chop near the top of the loop; the second group is the chop least like it */
-  /* the anchor is the loop's own downbeat when it hits hard enough, so the flip still opens like the record */
-  const A=(use[0].a===0&&use[0].str>.4)?use[0]:use.slice(0,Math.max(2,Math.ceil(use.length/3))).sort((a,b)=>b.str-a.str)[0]||use[0];
-  const Bc=use.filter(c=>c.str>.35).sort((a,b)=>cos12(a.ch,A.ch)-cos12(b.ch,A.ch))[0];const two=Bc&&cos12(Bc.ch,A.ch)<.86;
-  const grp=g=>{const anc=g===0?A:Bc,mem=use.filter(c=>c===anc||(two?(g===0?cos12(c.ch,A.ch)>=cos12(c.ch,Bc.ch):cos12(c.ch,Bc.ch)>cos12(c.ch,A.ch)):true));
-    const rest=mem.filter(c=>c!==anc).sort((a,b)=>b.str-a.str).slice(0,3),pal=[anc,...rest].sort((a,b)=>a.br-b.br);const i0=pal.indexOf(anc);return{pal,anc:i0}};
-  const G=[grp(0),two?grp(1):null];
-  const rh=RHY[Math.floor(mr()*RHY.length)],hits=[...rh].map((c,i)=>c==="x"?i:-1).filter(i=>i>=0),mk=Object.keys(MOTIF),mot=MOTIF[mk[Math.floor(mr()*mk.length)]];
-  const fill=B>1&&mr()<.75,fillKind=mr()<.5?"stutter":"pickup",events=[];
-  const motifIdx=(g,i)=>{const P=G[g].pal;if(i===0)return G[g].anc;return mot[i%mot.length]%P.length};
-  for(let b=0;b<B;b++){const g=two&&b%2===1?1:0,P=G[g].pal,answer=b%2===1&&!two,last=B>1&&b===B-1;
-    let steps=hits.slice(),seq=steps.map((_,i)=>motifIdx(g,i));
-    /* the answer: same rhythm, the tail of the phrase goes somewhere new */
-    if(answer)for(let i=Math.max(1,seq.length-2);i<seq.length;i++)seq[i]=(seq[i]+1+Math.floor(mr()*(P.length-1)))%P.length;
-    let fillFrom=99,fillSt=0;if(last&&fill){const k=steps.filter(s=>s<12).length;steps=steps.slice(0,k);seq=seq.slice(0,k);fillFrom=k;
-      if(fillKind==="stutter")for(const s of[12,13,14,15]){steps.push(s);seq.push(G[0].anc)}else{for(const s of[12,14,15]){steps.push(s);seq.push(seq[seq.length-1]||0)}fillSt=mr()<.5?5:7}}
-    steps.forEach((s,i)=>{const c=P[seq[i]]||P[0],isF=i>=fillFrom;events.push({at:(b*16+s)*s16/L,src:c.a/L,max:c.dur/L,g:isF?.62+.12*(i-fillFrom):s%4===0?1:.86,st:isF&&fillKind==="pickup"&&i===steps.length-1?fillSt:0})})}
+/* chop points a producer would actually set: only the strong note starts, at most one per 8th note, nudged onto real hits */
+function strongPoints(sl,L,B){const e8=L/B/8,pts=[];const by=[...sl].sort((a,b)=>b.str-a.str);
+  for(const c of by){if(c.str<.25&&pts.length>=B*4)break;if(pts.some(q=>Math.abs(q.a-c.a)<e8*.9))continue;pts.push(c)}
+  /* every 8th that has no strong hit near it still gets a grid chop, so there is always enough to play with */
+  for(let k=0;k<B*8;k++){const a=Math.round(k*e8);if(!pts.some(q=>Math.abs(q.a-a)<e8*.5)){const near=sl.reduce((m,c)=>Math.abs(c.a-a)<Math.abs(m.a-a)?c:m,sl[0]);pts.push({...near,a:Math.abs(near.a-a)<e8*.25?near.a:a,str:near.str*.5})}}
+  return pts.sort((a,b)=>a.a-b.a)}
+/* Micro-Chop: a few long chops that ring into each other, tight on the grid, in a repeated phrase */
+const PHR=["x..x..x...x.....","x.....x.x..x....","x..x....x..x.x..","x...x.x...x..x..","x..x..x.x.......","x.....x...x.x...","x..x...x..x.....","x.x...x...x..x.."];
+function makeMicro(x,L,sr,B){const sl=flipSlices(x,L,sr,B),pts=strongPoints(sl,L,B),s16=L/B/16;
+  const strong=pts.filter(c=>c.str>.3).length>=4?pts.filter(c=>c.str>.3):pts;
+  const anc=strong.find(c=>c.a===0)||strong[0];
+  /* a small palette, like loading 4-5 pads: the anchor plus the chops that sit best with it harmonically, then one contrast chop */
+  const rest=strong.filter(c=>c!==anc).sort((a,b)=>(b.str*.5+cos12(b.ch,anc.ch))-(a.str*.5+cos12(a.ch,anc.ch)));
+  const contrast=rest.slice(3).sort((a,b)=>cos12(a.ch,anc.ch)-cos12(b.ch,anc.ch))[0];
+  const top5=rest.slice(0,5).sort(()=>mr()-.5),pal=[anc,...top5.slice(0,3),contrast].filter(Boolean);
+  const rh=PHR[Math.floor(mr()*PHR.length)],hits=[...rh].map((c,i)=>c==="x"?i:-1).filter(i=>i>=0);
+  /* the phrase: anchor on 1, then the palette in an order that stays the same every bar (that repetition is the hook) */
+  const order=[0,...[1,2,3].sort(()=>mr()-.5)],seqA=hits.map((_,i)=>i===0?0:order[1+(i-1)%3]%pal.length);
+  const events=[];
+  for(let b=0;b<B;b++){let seq=seqA.slice();const last=b===B-1&&B>1,answer=b%2===1;
+    /* bar 2 answers: last hit swaps to the contrast chop (or another palette chop) */
+    if(answer&&seq.length>1)seq[seq.length-1]=pal.length>4?4:(seq[seq.length-1]+1)%pal.length;
+    let steps=hits.slice();
+    /* end of the phrase: a clean pickup, the anchor twice on the last two 8ths */
+    if(last&&mr()<.6){const k=steps.filter(s=>s<12).length;steps=[...steps.slice(0,k),12,14];seq=[...seq.slice(0,k),0,0]}
+    steps.forEach((s,i)=>{const c=pal[seq[i]]||pal[0];events.push({at:(b*16+s)*s16/L,src:c.a/L,max:1,g:s%8===0?1:.9,st:0})})}
   return events}
-function makeOffgrid(x,L,sr,B){const sl=flipSlices(x,L,sr,B).filter(c=>c.dur>.03*sr||c.grid),s16=L/B/16,sw=.3,ev=[];
-  /* every chop to the nearest 16th, then pushed by feel */
-  const feel=st=>{const pos=st%16;let o=pos%2===1?sw*s16:0;if(pos===4||pos===12)o-=.012*sr;else if(pos%4!==0)o+=(.008+mr()*.018)*sr;else if(pos!==0)o+=(mr()*.008)*sr;return o};
-  const base=[];for(const c of sl){const st=Math.max(0,Math.min(B*16-1,Math.round(c.a/s16)));if(!base.some(q=>q.st===st))base.push({st,c})}
-  const fx=new Map();const feelAt=st=>{if(!fx.has(st))fx.set(st,feel(st));return fx.get(st)};
-  const rep=B>=2?Math.floor(mr()*B):-1,repBeat=1+Math.floor(mr()*3),dbl=new Set(),drop=new Set();
-  base.forEach((b,i)=>{if(b.st%4===2&&mr()<.15)dbl.add(i);if(b.st%16!==0&&b.st%4!==0&&mr()<.1)drop.add(i)});
-  base.forEach((b,i)=>{if(drop.has(i))return;const bar=Math.floor(b.st/16),beat=Math.floor((b.st%16)/4);let src=b.c.a;
-    /* replay: in one bar, a beat plays the first beat's audio again (a Donuts-style repeat) */
-    if(bar===rep&&beat===repBeat)src=b.c.a-Math.round(beat*4*s16);
-    const at=b.st*s16+feelAt(b.st);ev.push({at:Math.max(0,Math.min(L-1,at))/L,src:Math.max(0,src)/L,max:b.c.dur/L,g:1,st:0});
-    if(dbl.has(i)){const at2=at+s16*.5;ev.push({at:Math.min(L-1,at2)/L,src:b.c.a/L,max:b.c.dur/L,g:.7,st:0})}});
-  return ev}
+/* Off-Grid: the sample in its own order, cut on 8ths, with one consistent lazy pocket (late "ands"), and one Donuts-style edit at the end */
+function makeOffgrid(x,L,sr,B){const sl=flipSlices(x,L,sr,B),pts=strongPoints(sl,L,B),e8=L/B/8,swing=.14,lag=Math.round(.006*sr),ev=[];
+  const cuts=[];for(let k=0;k<B*8;k++){const a=Math.round(k*e8),near=pts.reduce((m,c)=>Math.abs(c.a-a)<Math.abs(m.a-a)?c:m,pts[0]);cuts.push(Math.abs(near.a-a)<e8*.2?near.a:a)}
+  const editBar=B-1,edit=["repeat","stutter","none"][Math.floor(mr()*3)];
+  for(let k=0;k<B*8;k++){let src=cuts[k];const bar=Math.floor(k/8),pos=k%8;
+    if(bar===editBar&&edit==="repeat"&&pos>=6)src=cuts[bar*8+pos-2];
+    if(bar===editBar&&edit==="stutter"&&pos===7)src=cuts[bar*8+6];
+    let at=Math.round(k*e8);if(pos%2===1)at+=Math.round(swing*e8)+lag;else if(pos===2||pos===6)at-=Math.round(.004*sr);
+    ev.push({at:Math.max(0,at)/L,src:src/L,max:1,g:1,st:0})}
+  ev[0].at=0;return ev}
 function makeFlip(it,p,kind){const q={...p,flip:null,mode:""},keep=S.params[it.id];S.params[it.id]=q;const r=render(it);S.params[it.id]=keep;
   const x=r.seg,L=x.length,sr=S.sr,B=it.bars,events=(kind==="offgrid"?makeOffgrid:makeMicro)(x,L,sr,B);
   events.sort((a,b)=>a.at-b.at);events.forEach((e,i)=>{const gap=(i+1<events.length?events[i+1].at:1)-e.at;e.len=Math.max(1/L,Math.min(gap,Math.max(e.max||gap,1.5*L/B/16/L)))});
-  const srcs=new Set(events.map(e=>e.src.toFixed(5)));return{events,pads:srcs.size,hits:events.length,swing:kind==="offgrid"?.3:0,kind}}
+  const srcs=new Set(events.map(e=>e.src.toFixed(5)));return{events,pads:srcs.size,hits:events.length,swing:kind==="offgrid"?.14:0,kind}}
 const MODES={
   soul:{name:"Soul Speed-Up",go(p){const n=Math.max(2,Math.min(7,Math.round(12*Math.log2(94/S.bpm))));Object.assign(p,{tape:true,bpm:Math.round(S.bpm*2**(n/12)),hp:110,style:"Warm"})}},
   micro:{name:"Micro-Chop Flip",go(p,it){p.flip=makeFlip(it,p,"micro")}},
