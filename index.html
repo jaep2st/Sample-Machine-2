@@ -520,11 +520,13 @@ function rank(){const all=chopSet(S.bars);if(!all.length){S.best=[];S.weird=[];r
   all.forEach((c,i)=>{const f=F[i],q=f.q,why=[];let s=c.score;
     /* fades and near-silence: nobody samples the song dying out */
     const slope=Math.min(q[3]/(q[0]+1e-9),q[0]/(q[3]+1e-9)),fade=q[3]<q[0]*.55&&q[3]<q[2]&&q[2]<q[1]*1.05,fin=q[0]<q[3]*.55&&q[0]<q[1];
-    if(f.level<med*.35)s*=.15;else if(f.level<med*.6)s*=.6;
-    if(tail.has(i))s*=.1;if(fade&&c.end>S.dur*.6)s*=.2;else if(fade)s*=.6;if(fin&&c.start<S.dur*.3)s*=.4;if(slope<.4)s*=.7;
+    if(f.level<med*.12)s*=.1;else if(f.level<med*.25)s*=.5;
+    if(tail.has(i))s*=.1;if(fade&&c.end>S.dur*.6)s*=.2;else if(fade)s*=.6;if(fin&&q[0]<med*.1&&c.start<S.dur*.3)s*=.4;if(slope<.4)s*=.7;
     if(f.loop>.93){s*=1.15;if(f.loop>=lp70)why.push("Loops clean")}
     if(f.chg>.12&&f.chg<.45){s*=1.05;if(f.chg>=cg75)why.push("Chord change")}
-    if(brk.has(c.id))why.unshift("Drum break");else if(opn.has(c.id))why.unshift("No drums");
+    /* open music with no drums on it is what diggers hunt for, and a soft unaccompanied intro is the classic spot (think the piano that opens a soul record) */
+    const intro=c.start<Math.max(20,S.dur*.12)&&f.level>=med*.12;
+    if(brk.has(c.id))why.unshift("Drum break");else if(opn.has(c.id)){s*=intro?1.6:1.25;why.unshift(intro?"Intro, no drums":"No drums")}else if(intro&&f.level<med*.8){s*=1.15;why.unshift("Intro")}
     c.rs=s;c.why=why});
   /* one of each part: a chorus that comes back four times shows up once, its cleanest take */
   const sc=[...all].sort((a,b)=>b.rs-a.rs),pick=[],want=Math.max(6,Math.min(12,Math.floor(all.length/3)));

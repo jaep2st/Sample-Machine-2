@@ -30,6 +30,10 @@ const cos = (a, b) => { let d = 0, x = 0, z = 0; for (let k = 0; k < 12; k++) { 
   check(dup <= Math.max(0, S.best.length - 4), `Repeats: ${dup} near-copies among ${S.best.length} Best chops (the rest are different parts)`);
   check(S.best.some(c => c.why.includes("Drum break")), `Tags: the drum break is labelled (${S.best.map(c => c.why[0] || "-").join(", ")})`);
   check(S.best.every(c => Array.isArray(c.why)), "Every Best chop carries its reasons");
+  // 4. a soft, drumless intro (the C.R.E.A.M. situation): it should be at or near the top
+  await load({ name: "soul intro", tempo: () => 90, dur: 120, pat: BOOM, bass: 1, piano: 1, drumsFrom: 16, seed: 21 });
+  const ip = S.best.findIndex(c => c.end <= 16.5);
+  check(ip >= 0 && ip <= 1, `Drumless intro: ranked #${ip + 1} in Best (${S.best[Math.max(0, ip)].why.join(", ")})`);
   console.log(fails ? `\n${fails} check(s) FAILED` : "\nAll Best checks passed");
   process.exit(fails ? 1 : 0);
 })();
