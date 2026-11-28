@@ -262,7 +262,8 @@ function stretchPlan(x,rate){const N=2048,Hs=1024,tol=512,outLen=Math.floor(x.le
     pos.push(p);prev=p}return{pos,outLen}}
 function stretchApply(x,plan){const N=2048,Hs=1024,w=hann(N),{pos,outLen}=plan,out=new Float32Array(outLen+N),ws=new Float32Array(outLen+N);
   pos.forEach((p,k)=>{const o=k*Hs;for(let i=0;i<N;i++){out[o+i]+=(x[p+i]||0)*w[i];ws[o+i]+=w[i]}});
-  const r=new Float32Array(outLen);for(let i=0;i<outLen;i++)r[i]=ws[i]>1e-3?out[i]/ws[i]:0;return r}
+  /* the very first samples sit under the window's near-zero edge: take them straight from the source so the sound starts cleanly */
+  const r=new Float32Array(outLen);for(let i=0;i<outLen;i++)r[i]=ws[i]>1e-3?out[i]/ws[i]:i<Hs?(x[pos[0]+i]||0):0;return r}
 function mono(xs){if(xs.length===1)return xs[0];const o=new Float32Array(xs[0].length);for(const x of xs)for(let i=0;i<o.length;i++)o[i]+=x[i]/xs.length;return o}
 function stretch(xs,rate){if(Math.abs(rate-1)<1e-3||xs[0].length<4096)return xs;const plan=stretchPlan(mono(xs),rate);return xs.map(x=>stretchApply(x,plan))}
 function normAll(xs){let m=0;for(const x of xs)for(const v of x)m=Math.max(m,Math.abs(v));if(m>0){const g=0.92/m;for(const x of xs)for(let i=0;i<x.length;i++)x[i]*=g}return xs}
@@ -441,26 +442,45 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   /* exact loop length: the chop conformed to the BPM in its file name, to the sample */
   const L=Math.max(64,Math.round((e-s)*sr*ratio));
   /* grab extra audio past the seam (before it, when reversed) to crossfade the loop point */
-  const pad=chop?.06:0,a0=p.rev?Math.max(0,s-pad):s,a1=p.rev?e:Math.min(S.dur,e+pad);
-  let xs=S.ch.map(c=>c.slice(Math.floor(a0*sr),Math.floor(a1*sr))),key=S.key;
-  /* tape mode: speed and pitch move together like a turntable or tape deck (the sped-up soul sound) */
-  let tapeSt=0;if(p.tape&&chop){xs=xs.map(x=>resample(x,1/ratio));tapeSt=Math.round(12*Math.log2(1/ratio))}
-  else if(p.pitch)xs=stretch(xs,1/(ratio*f)).map(x=>resample(x,f));
-  else if(Math.abs(ratio-1)>1e-6)xs=Math.abs(ratio-1)<.006?xs.map(x=>resample(x,1/ratio)):stretch(xs,1/ratio);
+  /* the loop plus a little real audio on each side: the end of the loop fades into the audio just before its start
+     (or, at the very start of a track, the start fades in from the audio just after its end) */
+  const pad=chop?.06:0,i0=Math.floor(Math.max(0,s-pad)*sr),is=Math.floor(s*sr),ie=Math.floor(e*sr),i1=Math.floor(Math.min(S.dur,e+pad)*sr);
+  const part=(i,j)=>S.ch.map(c=>c.slice(i,j));let body=part(is,ie),preX=part(i0,is),postX=part(ie,i1),key=S.key;
+  /* time and pitch: the loop gets the full treatment; the short side pieces get a matching speed change so the seam lines up */
+  let tapeSt=0;const tm=(xs,full)=>{if(!xs[0].length)return xs;
+    if(p.tape&&chop)return xs.map(x=>resample(x,1/ratio));
+    if(p.pitch)return full?stretch(xs,1/(ratio*f)).map(x=>resample(x,f)):xs.map(x=>resample(x,f));
+    if(Math.abs(ratio-1)>1e-6)return Math.abs(ratio-1)<.006||!full?xs.map(x=>resample(x,1/ratio)):stretch(xs,1/ratio);return xs};
+  if(p.tape&&chop)tapeSt=Math.round(12*Math.log2(1/ratio));
+  /* reverse first, so the stretcher starts exactly at the reversed loop's first sample */
+  if(p.rev)for(const g of [body,preX,postX])g.forEach(x=>x.reverse());
+  body=tm(body,true);preX=tm(preX,false);postX=tm(postX,false);
   if(p.rand)st.push("Randomized");
   if(p.mode)st.push(p.mode);
   if(tapeSt){key=shiftKey(S.key,tapeSt);st.push(`Tape speed ${tapeSt>0?"+":""}${tapeSt} st → ${key}`)}
   else if(p.pitch){key=shiftKey(S.key,p.pitch);st.push(`${p.pitch>0?"+":""}${p.pitch} st → ${key}`)}
   if(chop&&p.bpm!==bb)st.push(`${p.bpm} BPM`);
-  if(p.rev){xs.forEach(x=>x.reverse());st.push("Reversed")}
+  if(p.rev)st.push("Reversed");
+  /* lay out [audio before the loop | loop | audio after]; reversed, the pieces swap sides */
+  const lead=p.rev?postX:preX,trail=p.rev?preX:postX,bs=lead[0].length;
+  let xs=body.map((x,c)=>{const o=new Float32Array(lead[c].length+x.length+trail[c].length);o.set(lead[c],0);o.set(x,lead[c].length);o.set(trail[c],lead[c].length+x.length);return o});
   if(p.style!=="Clean"){xs=xs.map(x=>fx(x,p.style,sr));st.push(p.style)}
   if(p.hp){xs=xs.map(x=>filt(x,"hp",p.hp,.7,sr));st.push(`HP ${p.hp} Hz`)}
   if(p.lp){xs=xs.map(x=>filt(x,"lp",p.lp,p.q||.8,sr));st.push(`LP ${p.lp>=1000?(p.lp/1000).toFixed(1)+" k":p.lp+" Hz"}`)}
   if(p.grit){xs=xs.map(x=>grit(x,sr));st.push("SP grit")}
   if(p.vinyl){xs=vinyl(xs,sr);st.push("Vinyl")}
   let chs,seam=false;
-  if(chop)chs=xs.map(x=>{if(x.length<L){const z=new Float32Array(L);z.set(x);x=z}const seg=x.slice(0,L),tail=x.subarray(L),cf=Math.min(tail.length,Math.floor(.02*sr),L>>2);
-    if(cf>=32){for(let i=0;i<cf;i++){const t=(i+.5)/cf*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}seam=true}else edgeFade(seg,sr);return seg});
+  /* loop seam: crossfade the END of the loop into the audio that really precedes its start, so the last sample flows
+     straight into the first. The opening hit is never touched and the length stays exact to the sample. */
+  if(chop){const cf0=Math.floor(.01*sr),short=Math.max(24,Math.floor(.003*sr));
+    chs=xs.map(x=>{if(x.length<bs+L){const z=new Float32Array(bs+L);z.set(x);x=z}const seg=x.slice(bs,bs+L),pre=x.subarray(0,bs),tail=x.subarray(bs+L);
+      let cf=Math.min(bs,cf0,L>>3);
+      if(cf>=short){/* a hit inside the fade window would get smeared: shorten the fade so it lands after the hit */
+        const h=cf>>1;let e0=0,e1=0;for(let i=0;i<h;i++){e0+=Math.abs(seg[L-cf+i]);e1+=Math.abs(seg[L-h+i])}if(e1>e0*2.5)cf=short;
+        for(let i=0;i<cf;i++){const t=(i+.5)/cf*Math.PI/2,j=L-cf+i;seg[j]=seg[j]*Math.cos(t)+pre[bs-cf+i]*Math.sin(t)}seam=true}
+      else{const cg=Math.min(tail.length,cf0,L>>3);/* nothing before the loop (start of the track): fade its start in from the audio after its end */
+        if(cg>=short){for(let i=0;i<cg;i++){const t=(i+.5)/cg*Math.PI/2;seg[i]=seg[i]*Math.sin(t)+tail[i]*Math.cos(t)}seam=true}else edgeFade(seg,sr)}
+      return seg})}
   else chs=xs.map(seg=>{const fi=Math.min(Math.floor(.002*sr),seg.length>>3),fo=Math.min(Math.floor(.015*sr),seg.length>>2);for(let i=0;i<fi;i++)seg[i]*=i/fi;for(let i=0;i<fo;i++)seg[seg.length-1-i]*=i/fo;return seg});
   if(chop&&p.flip){chs=flipChs(chs,p.flip,sr);st.push(p.flip.swing?`Flipped, ${Math.round(50+p.flip.swing*50)}% swing`:"Flipped")}
   normAll(chs);if(seam)st.push("Seamless loop");if(chs.length>1)st.push("Stereo");const seg=chs[0];

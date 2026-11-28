@@ -42,6 +42,14 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     if (m === "bass") check(hf(r.seg) < hf(plain.seg) * .05, `Filtered Bass: highs removed (${(hf(r.seg) / hf(plain.seg) * 100).toFixed(1)}% left)`);
     if (m === "dusty") check(hf(r.seg) < hf(plain.seg), "Dusty Loop: top end softened");
   }
+  // loop seams: the first hit is untouched, and the last sample flows into the first (forward and reversed)
+  { let worstHit = 1, worstJump = 0;
+    for (const c of A.chopSet(2).slice(1, 9)) for (const rev of [false, true]) {
+      S.params[c.id] = Object.assign(A.base(), { rev }); S.cache.clear(); const x = A.render(c).chs[0], L = x.length;
+      if (!rev) { const k = Math.floor(.025 * sr), o = Math.floor(c.start * sr); let d = 0, a = 0, b = 0; for (let i = 0; i < k; i++) { d += x[i] * S.ch[0][o + i]; a += x[i] * x[i]; b += S.ch[0][o + i] ** 2 } worstHit = Math.min(worstHit, d / Math.sqrt(a * b || 1)) }
+      let st = 0; for (let i = L - 200; i < L - 1; i++) st += Math.abs(x[i + 1] - x[i]); worstJump = Math.max(worstJump, Math.abs(x[0] - x[L - 1]) / (st / 199 || 1e-9)) }
+    check(worstHit > .98, `loop seams: first hit of every loop is untouched (worst match ${worstHit.toFixed(3)})`);
+    check(worstJump < 6, `loop seams: last sample flows into the first, forward and reversed (worst jump ${worstJump.toFixed(1)}x a normal step)`) }
   // flips re-roll: pressing a flip mode twice gives a different pattern
   S.params[it.id] = A.base(); let p = A.P(it.id); A.MODES.micro.go(p, it); const p1 = p.flip.pat.join(); A.MODES.micro.go(p, it);
   check(p.flip.pat.join() !== p1, "Micro-Chop Flip: tapping again gives a new flip");
