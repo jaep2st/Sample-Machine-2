@@ -207,6 +207,8 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
       <button data-m="screw" class="chopOnly">Screwed</button><button data-m="down" class="chopOnly">Pitch-Down</button>
       <button data-m="stab">Stab Kit</button><button data-m="drums">Drum Kit</button><button data-m="dusty">Dusty Loop</button><button data-m="bass">Filtered Bass</button><button data-m="sp">SP Grit</button>
     </div>
+    <div class="field"><label>Isolate <output>rough, done on your device</output></label></div>
+    <div class="seg" id="iso" style="display:flex;flex-wrap:wrap;margin-bottom:12px"><button data-i="full" aria-pressed="true">Full</button><button data-i="drums">Drums</button><button data-i="nodrums">No drums</button><button data-i="centre">Centre</button><button data-i="sides">Sides</button></div>
     <div id="kit" hidden style="margin:0 0 12px">
       <div id="kitpads" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:8px"></div>
       <div class="erow"><button class="btn" id="savekit">Save stab kit (8 pitched pads)</button><button class="btn" id="kitto">Send kit to pads</button></div>
@@ -531,6 +533,29 @@ function opens(){const cs=chopSet(S.bars);if(S.opn&&S.opn.cs===cs)return S.opn.l
 function tabItems(){switch(S.tab){case"best":return S.best;case"breaks":return breaks();case"open":return opens();case"weird":return S.weird;case"all":return chopSet(S.bars);case"shots":return S.shots;case"favs":return[...favs].filter(k=>k.startsWith(S.name+"|")).map(k=>byId(k.slice(S.name.length+1))).filter(Boolean)}return[]}
 
 /* ---------- render a chop with its tweaks ---------- */
+/* ---------- isolate (stem-lite): splits drums from melody on the phone itself, no upload ----------
+   Harmonic/percussive separation: sustained sounds form horizontal lines in a spectrogram, hits form vertical ones.
+   A median across time keeps the lines, a median across frequency keeps the hits; soft masks share every bin between them.
+   Centre/sides uses the stereo image: vocals, bass and kick usually sit in the centre, wide keys, strings and reverb in the sides. */
+function ifftReal(re,im,N,B){const r=new Float64Array(N),m=new Float64Array(N);for(let b=0;b<B;b++){r[b]=re[b];m[b]=-im[b]}for(let b=1;b<B-1;b++){r[N-b]=re[b];m[N-b]=im[b]}fft(r,m);for(let i=0;i<N;i++)r[i]/=N;return r}
+function median(a){a.sort();return a[a.length>>1]}
+function hpss(chs,which){const N=2048,H=512,n=chs[0].length,F=Math.floor(n/H)+1,B=N/2+1,w=hann(N),K=17,h2=K>>1;
+  const spec=chs.map(x=>{const R=[],I=[];for(let f=0;f<F;f++){const re=new Float64Array(N),im=new Float64Array(N),o=f*H-N/2;for(let i=0;i<N;i++){const j=o+i;re[i]=(j>=0&&j<n?x[j]:0)*w[i]}fft(re,im);R.push(Float32Array.from(re.subarray(0,B)));I.push(Float32Array.from(im.subarray(0,B)))}return{R,I}});
+  const M=[];for(let f=0;f<F;f++){const m=new Float32Array(B);for(const c of spec)for(let b=0;b<B;b++)m[b]+=Math.hypot(c.R[f][b],c.I[f][b]);M.push(m)}
+  const Ht=[],Pt=[],buf=new Float32Array(K);for(let f=0;f<F;f++){const hh=new Float32Array(B),pp=new Float32Array(B);
+    for(let b=0;b<B;b++){for(let k=0;k<K;k++){const g=Math.min(F-1,Math.max(0,f+k-h2));buf[k]=M[g][b]}hh[b]=median(buf);for(let k=0;k<K;k++){const g=Math.min(B-1,Math.max(0,b+k-h2));buf[k]=M[f][g]}pp[b]=median(buf)}Ht.push(hh);Pt.push(pp)}
+  return chs.map((x,c)=>{const out=new Float64Array(n),ws=new Float64Array(n);for(let f=0;f<F;f++){const re=new Float64Array(B),im=new Float64Array(B);
+      for(let b=0;b<B;b++){const h=Ht[f][b]**2,pq=Pt[f][b]**2,mk=(which==="p"?pq:h)/(h+pq+1e-20);re[b]=spec[c].R[f][b]*mk;im[b]=spec[c].I[f][b]*mk}
+      const y=ifftReal(re,im,N,B),o=f*H-N/2;for(let i=0;i<N;i++){const j=o+i;if(j>=0&&j<n){out[j]+=y[i]*w[i];ws[j]+=w[i]*w[i]}}}
+    const r=new Float32Array(n);for(let i=0;i<n;i++)r[i]=ws[i]>1e-6?out[i]/ws[i]:0;return r})}
+const ISO={full:"Full mix",drums:"Drums",nodrums:"No drums",centre:"Centre",sides:"Sides"};
+function isolate(chs,mode){if(mode==="drums")return hpss(chs,"p");if(mode==="nodrums")return hpss(chs,"h");
+  if(chs.length<2)return chs;const[L,R]=chs,n=L.length,a=new Float32Array(n),b=new Float32Array(n);
+  for(let i=0;i<n;i++){const m=(L[i]+R[i])/2;if(mode==="centre"){a[i]=m;b[i]=m}else{a[i]=L[i]-m;b[i]=R[i]-m}}return[a,b]}
+/* a region with extra audio either side, so the separation has context at the edges, cached per chop */
+function isoRegion(i0,i1,mode){const k=mode+"|"+i0+"|"+i1;if(!S.iso||S.iso.y!==S.y)S.iso={y:S.y,m:new Map()};if(S.iso.m.has(k))return S.iso.m.get(k);
+  const m=mode==="drums"||mode==="nodrums"?4096:0,a=Math.max(0,i0-m),b=Math.min(S.y.length,i1+m),out=isolate(S.ch.map(c=>c.slice(a,b)),mode).map(c=>c.slice(i0-a,i0-a+(i1-i0)));
+  if(S.iso.m.size>12)S.iso.m.delete(S.iso.m.keys().next().value);S.iso.m.set(k,out);return out}
 const base=()=>({shift:0,ts:0,te:0,pitch:0,bpm:S.tb,rev:false,style:"Clean",rand:false,tape:false,lp:0,hp:0,q:.8,grit:false,vinyl:false,flip:null,mode:""});
 const P=id=>S.params[id]||(S.params[id]=base());
 function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k))return S.cache.get(k);const sr=S.sr,chop=it.kind==="chop";
@@ -542,7 +567,7 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   /* the loop plus a little real audio on each side: the end of the loop fades into the audio just before its start
      (or, at the very start of a track, the start fades in from the audio just after its end) */
   const pad=chop?.06:0,i0=Math.floor(Math.max(0,s-pad)*sr),is=Math.floor(s*sr),ie=Math.floor(e*sr),i1=Math.floor(Math.min(S.dur,e+pad)*sr);
-  const part=(i,j)=>S.ch.map(c=>c.slice(i,j));let body=part(is,ie),preX=part(i0,is),postX=part(ie,i1),key=S.key;
+  const iso=p.iso&&p.iso!=="full"?isoRegion(i0,i1,p.iso):null,part=(i,j)=>iso?iso.map(c=>c.slice(i-i0,j-i0)):S.ch.map(c=>c.slice(i,j));let body=part(is,ie),preX=part(i0,is),postX=part(ie,i1),key=S.key;
   /* time and pitch: the loop gets the full treatment; the short side pieces get a matching speed change so the seam lines up */
   let tapeSt=0;const tm=(xs,full)=>{if(!xs[0].length)return xs;
     if(p.tape&&chop)return xs.map(x=>resample(x,1/ratio));
@@ -554,6 +579,7 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
   body=tm(body,true);preX=tm(preX,false);postX=tm(postX,false);
   if(p.rand)st.push("Randomized");
   if(p.mode)st.push(p.mode);
+  if(iso)st.push(`Isolated: ${ISO[p.iso]}`);
   if(tapeSt){key=shiftKey(S.key,tapeSt);st.push(`Tape speed ${tapeSt>0?"+":""}${tapeSt} st → ${key}`)}
   else if(p.pitch){key=shiftKey(S.key,p.pitch);st.push(`${p.pitch>0?"+":""}${p.pitch} st → ${key}`)}
   if(chop&&p.bpm!==bb)st.push(`${p.bpm} BPM`);
@@ -583,7 +609,7 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
     else{chs=flipChs(chs,p.flip,sr);st.push(p.flip.swing?`Flipped, ${Math.round(50+p.flip.swing*50)}% swing`:"Flipped")}}
   normAll(chs);if(seam)st.push("Seamless loop");if(chs.length>1)st.push("Stereo");const seg=chs[0];
   let name=`${chop?p.bpm:bb}bpm_${key.replace(" ","_")}_${chop?"chop":"oneshot"}${String(it.n).padStart(2,"0")}${chop?"_"+it.id.slice(1).split("_")[0]+"bar":""}_${s.toFixed(1)}s`;
-  if(tapeSt)name+=`_tape${tapeSt>0?"+":""}${tapeSt}`;else if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");if(p.mode)name+="_"+p.mode.toLowerCase().replace(/[^a-z]+/g,"");
+  if(tapeSt)name+=`_tape${tapeSt>0?"+":""}${tapeSt}`;else if(p.pitch)name+=`_p${p.pitch>0?"+":""}${p.pitch}`;if(p.rev)name+="_rev";if(p.iso&&p.iso!=="full")name+="_"+p.iso;if(p.style!=="Clean")name+="_"+p.style.toLowerCase().replace("-","");if(p.mode)name+="_"+p.mode.toLowerCase().replace(/[^a-z]+/g,"");
   const meta={bpm:chop?p.bpm:bb,root:KEYS.indexOf(key.split(" ")[0]),beats:chop?Math.max(1,Math.round(seg.length/sr*p.bpm/60)):0,one:!chop};const r={chs,seg,name,st,s,e,meta};if(S.cache.size>150)S.cache.clear();S.cache.set(k,r);return r}
 
 /* ---------- beat engine: pads, pattern timing, bounce, MIDI (pure, no audio device needed) ---------- */
@@ -657,6 +683,7 @@ function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;d
   $("etitle").textContent=(it.kind==="os"?"One-shot ":"Chop ")+it.n;const t=$("tbpm"),bb=S.tb;t.min=Math.max(40,bb-40);t.max=Math.min(200,bb+40);
   for(const f of["shift","ts","te","pitch"])$(f).value=p[f];t.value=p.bpm;$("rev").setAttribute("aria-pressed",p.rev);$("rev").textContent="Reverse: "+(p.rev?"on":"off");
   for(const b of $("styles").children)b.setAttribute("aria-pressed",b.dataset.s===p.style);
+  for(const b of $("iso").children)b.setAttribute("aria-pressed",(p.iso||"full")===b.dataset.i);
   for(const b of $("modes").children)b.setAttribute("aria-pressed",!!p.mode&&MODES[b.dataset.m]&&MODES[b.dataset.m].name===p.mode);
   if(!kit||S.kitFor!==it.id){$("kit").hidden=true;kit=null}S.kitFor=it.id;$("flipto").hidden=!(p.flip&&p.flip.events);if(SL.open)setTimeout(slLoad,0);
   $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
@@ -735,6 +762,8 @@ const hz=v=>v<=0?0:Math.round(60*2**(v/100*8.15)),hzH=v=>v<=0?0:Math.round(20*2*
 for(const f of["shift","ts","te","pitch","tbpm"])$(f).addEventListener("input",e=>{const p=P(S.sel.id);p[f==="tbpm"?"bpm":f]=Number(e.target.value);changed()});
 $("styles").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;P(S.sel.id).style=b.dataset.s;for(const x of $("styles").children)x.setAttribute("aria-pressed",x===b);changed()});
 $("rev").onclick=()=>{const p=P(S.sel.id);p.rev=!p.rev;openEditor();changed()};
+$("iso").addEventListener("click",e=>{const b=e.target.closest("button");if(!b||!S.sel)return;const p=P(S.sel.id);p.iso=b.dataset.i;for(const x of $("iso").children)x.setAttribute("aria-pressed",x===b);
+  if(p.iso==="drums"||p.iso==="nodrums")$("estat").textContent="Separating…";setTimeout(changed,30)});
 $("modes").addEventListener("click",e=>{const b=e.target.closest("button");if(b&&S.sel)applyMode(b.dataset.m)});
 $("kitpads").addEventListener("click",e=>{const b=e.target.closest("button");if(b&&kit)playRaw(kit[+b.dataset.k].chs)});
 $("savekit").onclick=()=>{if(!kit)return;const nm=S.name.replace(/[^\w-]+/g,"_");const drums=!!kit[0].file;saveZip(`${nm}_${drums?"drum":"stab"}_kit.zip`,kit.map((k,i)=>({name:drums?`${String(i+1).padStart(2,"0")}_${k.file}.wav`:`${String(i+1).padStart(2,"0")}_stab_${k.note.replace("#","s")}${k.st===12?"_hi":""}.wav`,data:wav(k.chs,S.sr,{bpm:S.tb,root:KEYS.indexOf(k.note),beats:0,one:true})})))};

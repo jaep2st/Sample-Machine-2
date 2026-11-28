@@ -111,6 +111,12 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     out = A.bounceBeat(B, sr); let h0 = out[0].findIndex(v => v > .5); check(Math.abs(h0 - Math.round((4 * st + .01) * sr)) <= 1, "Pad nudge +10 ms plays 10 ms late");
     { const tone = [Float32Array.from({ length: sr }, (_, i) => Math.sin(2 * Math.PI * 220 * i / sr) * .5)], up = A.padBake({ chs: tone, st: 5, warp: true }), tape = A.padBake({ chs: tone, st: 5 });
       check(Math.abs(up[0].length - sr) < sr * .02 && tape[0].length < sr * .8, `Pad pitch +5: keep-length mode stays ${(up[0].length / sr).toFixed(2)} s, tape mode shortens to ${(tape[0].length / sr).toFixed(2)} s`) }
+    { const n = sr * 3; let z = 7; const rnd = () => (z = z * 16807 % 2147483647) / 2147483647 - .5;
+      const tone = Float32Array.from({ length: n }, (_, i) => .3 * (Math.sin(2 * Math.PI * 220 * i / sr) + .5 * Math.sin(2 * Math.PI * 330 * i / sr)));
+      const hits = new Float32Array(n); for (let t0 = 0; t0 < n; t0 += Math.round(sr * .25)) for (let i = 0; i < 2000 && t0 + i < n; i++) hits[t0 + i] = rnd() * 1.2 * Math.exp(-i / 250) + .8 * Math.sin(2 * Math.PI * 60 * i / sr) * Math.exp(-i / 600);
+      const mix = tone.map((v, i) => v + hits[i]), snr = (y, r) => { let e = 0, q = 0; for (let i = 4096; i < n - 4096; i++) { e += (y[i] - r[i]) ** 2; q += r[i] ** 2 } return 10 * Math.log10(q / e) };
+      const h = A.isolate([mix, mix], "nodrums")[0], p = A.isolate([mix, mix], "drums")[0], gh = snr(h, tone) - snr(mix, tone), gp = snr(p, hits) - snr(mix, hits);
+      check(gh > 15 && gp > 15 && h.length === n, `Isolate: No drums cleans the melody by ${gh.toFixed(0)} dB, Drums cleans the drums by ${gp.toFixed(0)} dB`) }
     const m = A.midiFile({ ...B, events: [{ pad: 0, step: 0 }, { pad: 1, step: 4 }] }), str = String.fromCharCode(...m.slice(0, 4));
     const notes = []; for (let i = 0; i < m.length - 2; i++) if (m[i] === 0x90) notes.push(m[i + 1]);
     check(str === "MThd" && m[13] === 96 && notes.join() === "36,37", `MIDI export: valid file, pads map to notes ${notes.join(", ")}`);
