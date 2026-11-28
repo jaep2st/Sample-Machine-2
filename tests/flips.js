@@ -109,6 +109,8 @@ const hf = x => { let s = 0; for (let i = 1; i < x.length; i++) s += (x[i] - x[i
     B.pads[1].cut = 0; out = A.bounceBeat(B, sr); check(out[0][mid] > .35, "No cut group: both sounds ring together");
     B.pads[0].nudge = 10; B.pads[0].cut = 0; B.events = [{ pad: 0, step: 4, off: 0 }]; B.pads[0].chs = click(2000);
     out = A.bounceBeat(B, sr); let h0 = out[0].findIndex(v => v > .5); check(Math.abs(h0 - Math.round((4 * st + .01) * sr)) <= 1, "Pad nudge +10 ms plays 10 ms late");
+    { const tone = [Float32Array.from({ length: sr }, (_, i) => Math.sin(2 * Math.PI * 220 * i / sr) * .5)], up = A.padBake({ chs: tone, st: 5, warp: true }), tape = A.padBake({ chs: tone, st: 5 });
+      check(Math.abs(up[0].length - sr) < sr * .02 && tape[0].length < sr * .8, `Pad pitch +5: keep-length mode stays ${(up[0].length / sr).toFixed(2)} s, tape mode shortens to ${(tape[0].length / sr).toFixed(2)} s`) }
     const m = A.midiFile({ ...B, events: [{ pad: 0, step: 0 }, { pad: 1, step: 4 }] }), str = String.fromCharCode(...m.slice(0, 4));
     const notes = []; for (let i = 0; i < m.length - 2; i++) if (m[i] === 0x90) notes.push(m[i + 1]);
     check(str === "MThd" && m[13] === 96 && notes.join() === "36,37", `MIDI export: valid file, pads map to notes ${notes.join(", ")}`);

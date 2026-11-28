@@ -343,9 +343,11 @@ function fx(x,style,sr){if(x.length<100)return x;const th=(a,g,m)=>{for(let i=0;
   case"Chorus":{const d=Math.floor(.012*sr);o=new Float32Array(x.length);for(let i=0;i<x.length;i++)o[i]=x[i]*.7+(i>=d?x[i-d]:0)*.35;return th(o,1.05,.93)}}
   return x}
 /* WSOLA time-stretch: rate>1 = shorter */
-function stretchPlan(x,rate){const N=2048,Hs=1024,tol=512,outLen=Math.floor(x.length/rate),pos=[];let prev=0;
+function stretchPlan(x,rate){const N=2048,Hs=1024,tol=512,w0=hann(N),outLen=Math.floor(x.length/rate),pos=[];let prev=0;
   for(let k=0;k*Hs<outLen;k++){const nom=Math.round(k*Hs*rate);let p=Math.min(nom,x.length-1);
-    if(k>0){const tgt=prev+Hs,lo=Math.max(0,nom-tol),hi=Math.min(x.length-N,nom+tol);let best=-Infinity;for(let c=lo;c<=hi;c+=2){let s=0;for(let i=0;i<N;i+=8)s+=(x[tgt+i]||0)*x[c+i];if(s>best){best=s;p=c}}}
+    if(k>0){/* coarse search, then a sample-exact refine on the overlap with normalised correlation: keeps bass notes smooth */
+      const tgt=prev+Hs,lo=Math.max(0,nom-tol),hi=Math.max(lo,Math.min(x.length-N,nom+tol));let best=-Infinity;for(let c=lo;c<=hi;c+=2){let s=0;for(let i=0;i<N;i+=8)s+=(x[tgt+i]||0)*x[c+i];if(s>best){best=s;p=c}}
+      const c0=p;best=-Infinity;for(let c=Math.max(lo,c0-3);c<=Math.min(hi,c0+3);c++){let s=0,e=1e-12;for(let i=0;i<N;i++){const v=x[c+i]||0;s+=(x[tgt+i]||0)*v*w0[i];e+=v*v*w0[i]}s/=Math.sqrt(e);if(s>best){best=s;p=c}}}
     pos.push(p);prev=p}return{pos,outLen}}
 function stretchApply(x,plan){const N=2048,Hs=1024,w=hann(N),{pos,outLen}=plan,out=new Float32Array(outLen+N),ws=new Float32Array(outLen+N);
   pos.forEach((p,k)=>{const o=k*Hs;for(let i=0;i<N;i++){out[o+i]+=(x[p+i]||0)*w[i];ws[o+i]+=w[i]}});
@@ -586,7 +588,7 @@ function render(it){const p=P(it.id),k=it.id+JSON.stringify(p);if(S.cache.has(k)
 
 /* ---------- beat engine: pads, pattern timing, bounce, MIDI (pure, no audio device needed) ---------- */
 /* a pad holds a sound (chs at sr) and its settings; baking applies pitch and reverse so playback and bounce sound identical */
-function padBake(pad){let chs=pad.chs;if(pad.st)chs=chs.map(x=>resample(x,2**(pad.st/12)));if(pad.rev)chs=chs.map(x=>x.slice().reverse());return chs}
+function padBake(pad){let chs=pad.chs;if(pad.st){const f=2**(pad.st/12);if(pad.warp)chs=stretch(chs,1/f);chs=chs.map(x=>resample(x,f))}if(pad.rev)chs=chs.map(x=>x.slice().reverse());return chs}
 /* attack ramp, then an optional decay to silence; dec 0 = let the sound play out */
 function padEnv(i,pad,sr){const a=Math.max(1,Math.round((pad.att||0)/1000*sr));let g=i<a?i/a:1;if(pad.dec){const d=Math.max(1,Math.round(pad.dec/1000*sr)),k=i-a;if(k>0)g*=Math.max(0,1-k/d)}return g}
 /* when a step plays: 16ths, MPC-style swing on the off 16ths (50% straight, 66% classic), the pad's own nudge, and any off-grid offset from live recording */
@@ -660,7 +662,10 @@ function openEditor(){const it=S.sel,p=P(it.id),ed=$("editor");ed.hidden=false;d
   $("lpf").value=inv(p.lp,60,8.15);$("hpf").value=inv(p.hp,20,6.65);$("tgrit").setAttribute("aria-pressed",!!p.grit);$("tvinyl").setAttribute("aria-pressed",!!p.vinyl);labels();heartUI();estat();playUI()}
 function closeEditor(){$("editor").hidden=true;document.body.classList.remove("sheet")}
 function labels(){const p=P(S.sel.id),sg=v=>(v>0?"+":"")+v;$("o_shift").textContent=sg(p.shift.toFixed(2))+" s";$("o_ts").textContent=sg(p.ts.toFixed(2))+" s";$("o_te").textContent=sg(p.te.toFixed(2))+" s";$("o_pitch").textContent=p.pitch?sg(p.pitch)+" st":"0";$("o_tbpm").textContent=p.bpm;$("o_lpf").textContent=p.lp?(p.lp>=1000?(p.lp/1000).toFixed(1)+" kHz":p.lp+" Hz"):"off";$("o_hpf").textContent=p.hp?p.hp+" Hz":"off"}
-let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
+/* the key of this chop on its own: a sample can move key mid-song, so the chop can differ from the whole track */
+function chopKey(it){if(!S.ck||S.ck.y!==S.y)S.ck={y:S.y};if(it.kind==="os"||it.end-it.start<2.5)return null;if(!(it.id in S.ck))S.ck[it.id]=detectKey(S.y.subarray(Math.floor(it.start*S.sr),Math.floor(it.end*S.sr)),S.sr);return S.ck[it.id]}
+function chopKeyNote(it){const k=chopKey(it),p=P(it.id);if(!k)return"";const n=p.tape?Math.round(12*Math.log2((it.end-it.start)/(it.bars*4*60/p.bpm))):p.pitch||0;return` · Chop key ${shiftKey(k,n)}${k!==S.key?" (moves off the song key)":""}`}
+let rt;function estat(){clearTimeout(rt);$("estat").textContent="Rendering…";rt=setTimeout(()=>{const r=render(S.sel);$("estat").textContent=`${fmt(r.s)} to ${fmt(r.e)} · ${(r.seg.length/S.sr).toFixed(2)} s${r.st.length?" · "+r.st.join(" · "):""}${chopKeyNote(S.sel)}`;if(cur&&cur.id===S.sel.id&&cur.loop)play(S.sel,true)},180)}
 function changed(){S.params[S.sel.id].rand=false;labels();estat();if(SL.open){clearTimeout(SL.t);SL.t=setTimeout(slLoad,250)}}
 let mseed=(Date.now()%2147483646)+1;const mr=()=>(mseed=mseed*16807%2147483647)/2147483647;
 /* proven chop rhythms, one bar of 16th notes each: x = hit a pad */
@@ -824,11 +829,11 @@ function renderPadset(){const i=BT.sel,pd=BT.pads[i],el=$("padset");
   const row=(id,lab,min,max,step,val,unit)=>`<div class="field"><label for="${id}">${lab} <output id="o_${id}">${val}${unit}</output></label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"></div>`;
   el.innerHTML=`<h3>Pad ${i+1}: ${esc(pd.name)}</h3>${row("pgain","Level",0,150,1,Math.round(pd.gain*100),"%")}${row("pst","Pitch",-12,12,1,pd.st," st")}${row("patt","Attack",0,200,1,pd.att," ms")}${row("pdec","Decay (0 = full length)",0,2000,10,pd.dec," ms")}${row("pnud","Nudge (− early, + late)",-40,40,1,pd.nudge," ms")}
     <div class="field"><label>Cut group</label></div><div class="seg" id="pcut"><button data-c="0" aria-pressed="${!pd.cut}">Off</button><button data-c="1" aria-pressed="${pd.cut===1}">A</button><button data-c="2" aria-pressed="${pd.cut===2}">B</button></div>
-    <div class="erow" style="margin-top:10px"><button class="btn" id="prev" aria-pressed="${!!pd.rev}">Reverse: ${pd.rev?"on":"off"}</button><button class="btn" id="pclr">Clear pad</button></div>`;
+    <div class="erow" style="margin-top:10px"><button class="btn" id="pwarp" aria-pressed="${!!pd.warp}">Pitch: ${pd.warp?"keep length":"tape (MPC)"}</button><button class="btn" id="prev" aria-pressed="${!!pd.rev}">Reverse: ${pd.rev?"on":"off"}</button><button class="btn" id="pclr">Clear pad</button></div>`;
   const upd=(k,v,o,u)=>{pd[k]=v;$("o_"+o).textContent=(k==="gain"?Math.round(v*100):v)+u;padBuf[i]=null;seqDirty=true};
   $("pgain").oninput=e=>upd("gain",e.target.value/100,"pgain","%");$("pst").oninput=e=>upd("st",+e.target.value,"pst"," st");$("patt").oninput=e=>upd("att",+e.target.value,"patt"," ms");
   $("pdec").oninput=e=>upd("dec",+e.target.value,"pdec"," ms");$("pnud").oninput=e=>upd("nudge",+e.target.value,"pnud"," ms");
-  $("pcut").onclick=e=>{const b=e.target.closest("button");if(!b)return;pd.cut=+b.dataset.c;renderPadset()};$("prev").onclick=()=>{pd.rev=!pd.rev;padBuf[i]=null;renderPadset()};
+  $("pcut").onclick=e=>{const b=e.target.closest("button");if(!b)return;pd.cut=+b.dataset.c;renderPadset()};$("prev").onclick=()=>{pd.rev=!pd.rev;padBuf[i]=null;renderPadset()};$("pwarp").onclick=()=>{pd.warp=!pd.warp;padBuf[i]=null;seqDirty=true;renderPadset()};
   $("pclr").onclick=()=>{BT.pads[i]=null;padBuf[i]=null;BT.events=BT.events.filter(e=>e.pad!==i);seqDirty=true;renderBeat()}}
 function renderGrid(){const rows=BT.pads.map((pd,i)=>pd||i===BT.sel?i:-1).filter(i=>i>=0),N=BT.bars*16,on=new Map(BT.events.map(e=>[e.pad+"_"+e.step,e]));
   if(!BT.pads.some(Boolean)){$("bgrid").innerHTML=`<div class="gempty">The grid fills in once a pad has a sound.</div>`;return}
@@ -895,7 +900,7 @@ function idb(){if(!idbP)idbP=new Promise((res,rej)=>{try{const r=indexedDB.open(
 async function idbDo(mode,fn){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction("sessions",mode),rq=fn(tx.objectStore("sessions"));tx.oncomplete=()=>res(rq&&rq.result);tx.onerror=()=>rej(tx.error)})}
 const AUTO="Last beat (autosaved)";
 function sessData(name){return{name,saved:Date.now(),track:S.name||"",bpm:BT.bpm,bars:BT.bars,swing:BT.swing,events:BT.events.map(e=>({...e})),pads:BT.pads.map(p=>p&&{...p,chs:p.chs.map(x=>x.slice())})}}
-function sessSig(){return JSON.stringify([BT.bpm,BT.bars,BT.swing,BT.events,BT.pads.map(p=>p&&[p.name,p.gain,p.st,p.rev,p.att,p.dec,p.cut,p.nudge,p.chs[0].length])])}
+function sessSig(){return JSON.stringify([BT.bpm,BT.bars,BT.swing,BT.events,BT.pads.map(p=>p&&[p.name,p.gain,p.st,p.rev,p.att,p.dec,p.cut,p.nudge,p.chs[0].length,p.warp])])}
 async function sessList(sel){try{const all=await idbDo("readonly",st=>st.getAll()),o=$("bsessions");all.sort((a,b)=>(a.name===AUTO)-(b.name===AUTO)||b.saved-a.saved);
   o.innerHTML=`<option value="">Sessions (${all.length})…</option>`+all.map(x=>`<option value="${esc(x.name)}"${x.name===sel?" selected":""}>${esc(x.name)}</option>`).join("");return all}catch(e){$("bsess")&&0;return[]}}
 async function sessSave(name){try{await idbDo("readwrite",st=>st.put(sessData(name)));if(name!==AUTO){toast(`Saved session “${name}”`);sessList(name)}}catch(e){if(name!==AUTO)toast("This browser won't save sessions here. Use Export kit instead.")}}
@@ -912,7 +917,7 @@ function padRender(pd){const ch=padBake(pd),g=pd.gain==null?1:pd.gain,sr=pd.sr;l
   return ch.map(x=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=x[i]*padEnv(i,pd,sr)*g;return o})}
 function exportFiles(){const nm=(S.name||"beat").replace(/[^\w-]+/g,"_").slice(0,40),sr=(BT.pads.find(Boolean)||{}).sr||S.sr,files=[],lines=[];
   BT.pads.forEach((pd,i)=>{if(!pd)return;const n=String(i+1).padStart(2,"0"),bank=`${"ABCD"[i>>2]}${(i&3)+1}`,safe=pd.name.replace(/[^\w-]+/g,"_");
-    files.push({name:`${nm}_kit/Pad${n}_${safe}.wav`,data:wav(padRender(pd),pd.sr)});lines.push(`Pad ${n} (MPC ${["A01","A02","A03","A04","A05","A06","A07","A08","A09","A10","A11","A12","A13","A14","A15","A16"][i]}, SP ${bank}, MIDI note ${36+i}): ${pd.name}${pd.st?`, pitch ${pd.st>0?"+":""}${pd.st} st`:""}${pd.rev?", reversed":""}${pd.cut?`, cut group ${" AB"[pd.cut]}`:""}`)});
+    files.push({name:`${nm}_kit/Pad${n}_${safe}.wav`,data:wav(padRender(pd),pd.sr)});lines.push(`Pad ${n} (MPC ${["A01","A02","A03","A04","A05","A06","A07","A08","A09","A10","A11","A12","A13","A14","A15","A16"][i]}, SP ${bank}, MIDI note ${36+i}): ${pd.name}${pd.st?`, pitch ${pd.st>0?"+":""}${pd.st} st`:""}${pd.st&&pd.warp?" (length kept)":""}${pd.rev?", reversed":""}${pd.cut?`, cut group ${" AB"[pd.cut]}`:""}`)});
   if(BT.events.length){files.push({name:`${nm}_kit/${nm}_pattern_${BT.bpm}bpm.mid`,data:midiFile(BT)});files.push({name:`${nm}_kit/${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(bounceBeat(BT,sr),sr,{bpm:BT.bpm,beats:BT.bars*4,root:0,one:false})})}
   const txt=`Sample Machine 2 kit: ${S.name||"beat"}\nTempo: ${BT.bpm} BPM, ${BT.bars} bar pattern, swing ${BT.swing}%\n\n${lines.join("\n")}\n\nHow to load it\n- MPC: drag the PadNN WAVs onto pads A01-A16 in order (or into a drum program), then import the .mid file. Pad 1 = note 36 (C1), the standard MPC / drum-rack layout.\n- SP-404: copy the WAVs to the SD card import folder and load Pad01-16 into bank A-D, pads 1-4 each.\n- DAW (Ableton Drum Rack, FL FPC, Logic Drum Machine Designer): drop the WAVs on pads starting at C1, then drag the .mid onto the track.\n- The beat WAV is exactly ${BT.bars} bars at ${BT.bpm} BPM, so it lines up in any DAW at that tempo.\n`;
   files.push({name:`${nm}_kit/README.txt`,data:new TextEncoder().encode(txt)});return{files,zipName:`${nm}_kit_${BT.bpm}bpm.zip`}}
