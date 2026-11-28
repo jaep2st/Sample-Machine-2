@@ -105,6 +105,7 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
 .beat{border-top:1px solid var(--line);padding-block:20px 26px;background:var(--panel)}
 .bhead h2{font-size:clamp(28px,5vw,40px);font-weight:800;line-height:1.05;margin:0}
 .bhead p{margin:4px 0 12px;color:var(--mute);font-size:15px;max-width:70ch}
+.bsess select{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;padding:0 8px;max-width:14rem}
 .btrans{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:12px}
 .btrans .chip{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:0 8px;min-height:44px}
 #brec[aria-pressed=true]{background:var(--hot);color:#fff;border-color:var(--hot)}
@@ -243,7 +244,8 @@ input[type=range]{width:100%;height:32px;accent-color:var(--hot)}
     <div class="seg" id="bbars" aria-label="Pattern length"><button data-b="1">1 bar</button><button data-b="2" aria-pressed="true">2</button><button data-b="4">4</button></div>
     <span class="chip">BPM <button class="mini" id="bbdn" aria-label="Tempo down">−</button><b id="bbpm">90</b><button class="mini" id="bbup" aria-label="Tempo up">+</button></span>
     <label class="chip" for="bswing">Swing <input type="range" id="bswing" min="50" max="75" step="1" value="50" style="width:110px"><output id="o_bswing">50%</output></label>
-    <button class="btn" id="bclear">Clear</button><button class="btn red" id="bbounce">Bounce beat</button>
+    <button class="btn" id="bclear">Clear</button><button class="btn red" id="bbounce">Bounce beat</button><button class="btn" id="bexport">Export kit (MPC / SP)</button></div>
+    <div class="btrans bsess"><button class="btn" id="bsave">Save session</button><select id="bsessions" aria-label="Saved sessions"><option value="">Sessions…</option></select><button class="btn" id="bload">Open</button><button class="btn" id="bdel">Delete</button>
   </div>
   <div class="bwrap">
     <div class="bpads" id="bpads"></div>
@@ -886,6 +888,36 @@ $("slclr").onclick=()=>{SL.marks=[0];slDraw()};
 $("slpads").addEventListener("pointerdown",e=>{const b=e.target.closest("button");if(b){e.preventDefault();playRaw(slSlice(+b.dataset.k))}});
 $("slsend").onclick=slSend;
 addEventListener("resize",()=>{if(SL.open)slDraw()});
+
+/* ---------- sessions (saved in this browser) and the pro export ---------- */
+let idbP=null;
+function idb(){if(!idbP)idbP=new Promise((res,rej)=>{try{const r=indexedDB.open("sample-machine-2",1);r.onupgradeneeded=()=>r.result.createObjectStore("sessions",{keyPath:"name"});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});return idbP}
+async function idbDo(mode,fn){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction("sessions",mode),rq=fn(tx.objectStore("sessions"));tx.oncomplete=()=>res(rq&&rq.result);tx.onerror=()=>rej(tx.error)})}
+const AUTO="Last beat (autosaved)";
+function sessData(name){return{name,saved:Date.now(),track:S.name||"",bpm:BT.bpm,bars:BT.bars,swing:BT.swing,events:BT.events.map(e=>({...e})),pads:BT.pads.map(p=>p&&{...p,chs:p.chs.map(x=>x.slice())})}}
+function sessSig(){return JSON.stringify([BT.bpm,BT.bars,BT.swing,BT.events,BT.pads.map(p=>p&&[p.name,p.gain,p.st,p.rev,p.att,p.dec,p.cut,p.nudge,p.chs[0].length])])}
+async function sessList(sel){try{const all=await idbDo("readonly",st=>st.getAll()),o=$("bsessions");all.sort((a,b)=>(a.name===AUTO)-(b.name===AUTO)||b.saved-a.saved);
+  o.innerHTML=`<option value="">Sessions (${all.length})…</option>`+all.map(x=>`<option value="${esc(x.name)}"${x.name===sel?" selected":""}>${esc(x.name)}</option>`).join("");return all}catch(e){$("bsess")&&0;return[]}}
+async function sessSave(name){try{await idbDo("readwrite",st=>st.put(sessData(name)));if(name!==AUTO){toast(`Saved session “${name}”`);sessList(name)}}catch(e){if(name!==AUTO)toast("This browser won't save sessions here. Use Export kit instead.")}}
+async function sessOpen(name){try{const d=await idbDo("readonly",st=>st.get(name));if(!d)return;if(BT.playing)seqStop();
+  BT.pads=d.pads.map(p=>p&&{...p});BT.events=d.events;BT.bars=d.bars;BT.swing=d.swing;padBuf=[];setBbpm(d.bpm);seqDirty=true;BT.sel=Math.max(0,BT.pads.findIndex(Boolean));lastSig=sessSig();renderBeat();toast(`Opened “${name}”`)}catch(e){toast("Couldn't open that session")}}
+let lastSig="";setInterval(()=>{if(!BT.pads.some(Boolean))return;const g=sessSig();if(g!==lastSig){lastSig=g;sessSave(AUTO)}},4000);
+$("bsave").onclick=()=>{if(!BT.pads.some(Boolean)){toast("Put a sound on a pad first");return}const def=`${(S.name||"Beat").slice(0,40)} ${BT.bpm}`,n=prompt("Name this session",def);if(n&&n.trim())sessSave(n.trim().slice(0,60))};
+$("bload").onclick=()=>{const n=$("bsessions").value;if(n)sessOpen(n);else toast("Pick a session from the list")};
+$("bdel").onclick=async()=>{const n=$("bsessions").value;if(!n){toast("Pick a session from the list");return}if(!confirm(`Delete “${n}”?`))return;try{await idbDo("readwrite",st=>st.delete(n));toast("Deleted");sessList()}catch(e){}};
+$("bsessions").addEventListener("focus",()=>sessList($("bsessions").value));
+sessList().then(all=>{if(all.some(x=>x.name===AUTO)&&!BT.pads.some(Boolean))toast("Your last beat is saved: Beat > Sessions")});
+/* export: every pad as its own WAV (named and numbered the way MPC and SP owners load them), the pattern as MIDI, the bounce, and a readme */
+function padRender(pd){const ch=padBake(pd),g=pd.gain==null?1:pd.gain,sr=pd.sr;let n=ch[0].length;if(pd.dec)n=Math.min(n,Math.round(((pd.att||0)+pd.dec)/1000*sr)+1);
+  return ch.map(x=>{const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=x[i]*padEnv(i,pd,sr)*g;return o})}
+function exportFiles(){const nm=(S.name||"beat").replace(/[^\w-]+/g,"_").slice(0,40),sr=(BT.pads.find(Boolean)||{}).sr||S.sr,files=[],lines=[];
+  BT.pads.forEach((pd,i)=>{if(!pd)return;const n=String(i+1).padStart(2,"0"),bank=`${"ABCD"[i>>2]}${(i&3)+1}`,safe=pd.name.replace(/[^\w-]+/g,"_");
+    files.push({name:`${nm}_kit/Pad${n}_${safe}.wav`,data:wav(padRender(pd),pd.sr)});lines.push(`Pad ${n} (MPC ${["A01","A02","A03","A04","A05","A06","A07","A08","A09","A10","A11","A12","A13","A14","A15","A16"][i]}, SP ${bank}, MIDI note ${36+i}): ${pd.name}${pd.st?`, pitch ${pd.st>0?"+":""}${pd.st} st`:""}${pd.rev?", reversed":""}${pd.cut?`, cut group ${" AB"[pd.cut]}`:""}`)});
+  if(BT.events.length){files.push({name:`${nm}_kit/${nm}_pattern_${BT.bpm}bpm.mid`,data:midiFile(BT)});files.push({name:`${nm}_kit/${nm}_beat_${BT.bpm}bpm_${BT.bars}bar.wav`,data:wav(bounceBeat(BT,sr),sr,{bpm:BT.bpm,beats:BT.bars*4,root:0,one:false})})}
+  const txt=`Sample Machine 2 kit: ${S.name||"beat"}\nTempo: ${BT.bpm} BPM, ${BT.bars} bar pattern, swing ${BT.swing}%\n\n${lines.join("\n")}\n\nHow to load it\n- MPC: drag the PadNN WAVs onto pads A01-A16 in order (or into a drum program), then import the .mid file. Pad 1 = note 36 (C1), the standard MPC / drum-rack layout.\n- SP-404: copy the WAVs to the SD card import folder and load Pad01-16 into bank A-D, pads 1-4 each.\n- DAW (Ableton Drum Rack, FL FPC, Logic Drum Machine Designer): drop the WAVs on pads starting at C1, then drag the .mid onto the track.\n- The beat WAV is exactly ${BT.bars} bars at ${BT.bpm} BPM, so it lines up in any DAW at that tempo.\n`;
+  files.push({name:`${nm}_kit/README.txt`,data:new TextEncoder().encode(txt)});return{files,zipName:`${nm}_kit_${BT.bpm}bpm.zip`}}
+$("bexport").onclick=async()=>{if(!BT.pads.some(Boolean)){toast("Put sounds on the pads first");return}const{files,zipName}=exportFiles();const dl=await downloads();
+  if(!dl){try{plainSave(zipName,zip(files));toast("Saved "+zipName)}catch(e){toast("Couldn't save that file")}}else saveZip(zipName,files)};
 
 /* ---------- demo beat so the machine opens mid-use ---------- */
 function demo(){const sr=44100,bpm=92,beat=60/bpm,bars=16,n=Math.floor(bars*4*beat*sr),y=new Float32Array(n);let seed=7;const rnd=()=>(seed=seed*16807%2147483647)/2147483647*2-1;
